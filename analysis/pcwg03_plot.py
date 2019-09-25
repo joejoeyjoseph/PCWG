@@ -6,6 +6,7 @@ import seaborn as sns
 
 import numpy as np
 import pandas as pd
+import math
 
 import geopandas as gpd
 from descartes import PolygonPatch
@@ -29,6 +30,8 @@ fs = 12
 f15 = 15
 
 plt.rcParams.update({'font.size': fs})
+
+xp_f1, yp_f1 = 0.04, 0.93 # x, y positions
 
 def save_plot(sub_dir, var, plot_type, pdf=True):
     """Export figure to either pdf or png file."""
@@ -167,7 +170,7 @@ def plot_hist_series(df, var, name):
 def loop_meta_hist():
     """Generate histograms from available meta data."""
 
-    for var, name in zip(pc.meta_var_names, pc.meta_xls_names):
+    for var, name in zip(pc.meta_var_names_turb, pc.meta_xls_names_turb):
         plot_hist_series(psd.meta_df, var, name)
 
 def plot_group_meta_hist():
@@ -221,8 +224,6 @@ def plot_group_meta_hist():
     ax4.set_xticklabels(labels=x_nozero4['index'], rotation=45)
     ax4.set_xlabel('Year of measurement', labelpad=25, fontsize=fs + 1)
     ax4.set_ylabel('')
-
-    xp_f1, yp_f1 = 0.04, 0.93
 
     ax1.text(xp_f1, yp_f1, '(a)', color='k', fontsize=fs, transform=ax1.transAxes)
     ax2.text(xp_f1, yp_f1, '(b)', color='k', fontsize=fs, transform=ax2.transAxes)
@@ -350,7 +351,7 @@ def plot_NME_hist():
     ax3.set_xlabel('Filtered Outer Range NME (%)')
 
     labels = ['A', 'B', 'C']
-    plt.legend(labels, title='Definition')
+    plt.legend(labels, title='Definition', loc='upper left')
 
     ax1.text(0.03, 0.89, '(a)', color='k', fontsize=12, transform=ax1.transAxes)
     ax2.text(0.05, 0.88, '(b)', color='k', fontsize=12, transform=ax2.transAxes)
@@ -474,5 +475,370 @@ def plot_wsti_nme_box():
 
     loop_box_plot('total_e', 'nme', psd.error_df, extra_error_df=psd.extra_error_df)
 
+def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
+    """Mass generate heatmaps of NME average and NME spread."""
 
-def
+    def loop_nme_avg_spread_heatmap(bt_choice, error_name, by_bin, e_df=psd.error_df, ee_df=None,
+                                    rr_choice=pc.robust_resistant_choice):
+
+        for idx, i_short in enumerate(pc.matrix_sheet_name_short):
+
+            df = psd.get_error_in_bin(e_df, i_short+bt_choice, by_bin, error_name)
+
+            u_bin, average, spread = psd.find_unique_bin_create_dum(df['bin_name'])
+
+            if idx == 0:
+                average_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short])
+                spread_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short])
+
+            psd.cal_average_spread(df, u_bin, average_df, spread_df, i_short, rr_choice)
+
+        if ee_df is not None:
+
+            for idx, i_short in enumerate(pc.extra_matrix_sheet_name_short):
+                df = psd.get_error_in_bin(psd.extra_error_df, i_short+bt_choice, by_bin, error_name)
+
+                u_bin, average, spread = psd.find_unique_bin_create_dum(df['bin_name'])
+
+                psd.cal_average_spread(df, u_bin, average_df, spread_df, i_short, rr_choice)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        if error_name == 'nme':
+
+            sns.heatmap(average_df, linewidths=.5, cmap='RdBu_r', center=0, ax=ax1)
+
+        elif error_name == 'nmae':
+
+            sns.heatmap(average_df, linewidths=.5, ax=ax1)
+
+        if rr_choice is None:
+
+            avg_title, spd_title, out_name = 'mean', 'standard deviation', 'mean_sd'
+
+        else:
+
+            avg_title, spd_title, out_name = 'median', 'interquartile range', 'median_iqr'
+
+        ax1.set_xlabel('correction methods')
+        ax1.set_ylabel(by_bin)
+        ax1.yaxis.set_tick_params(rotation=0)
+        ax1.set_title(bt_choice + 'nergy ' + avg_title + ' ' + error_name + ' (%)')
+
+        sns.heatmap(spread_df, linewidths=.5, cmap='viridis', ax=ax2)
+        ax2.set_xlabel('correction methods')
+        ax2.set_ylabel(by_bin)
+        ax2.yaxis.set_tick_params(rotation=0)
+        ax2.set_title(bt_choice + 'nergy ' + spd_title + ' of ' + error_name + ' (%)')
+
+        if ee_df is not None:
+            var = 'nme_avg_spread_boxplot_extra'
+        else:
+            var = 'nme_avg_spread_boxplot'
+
+        finish_plot('results', var, bt_choice + '_heatmap')
+
+    for by_bin in range(1, len(pc.error_cat_short)):
+        for bt_j in pc.bt_choice:
+            for k in range(1, len(pc.error_name)):
+
+                loop_nme_avg_spread_heatmap(bt_j, pc.error_name[k], pc.error_cat_short[by_bin],
+                                            e_df=psd.error_df, ee_df=ee_df,
+                                            rr_choice=rr_choice)
+
+def plot_inner_outer_data_count_box_hist():
+    """Plot Inner Range and Outer Range data count"""
+
+    box_io_df = psd.error_df['base_total_e'].loc[(psd.error_df['base_total_e']['error_cat'] == 'by_range')
+                                                 & (psd.error_df['base_total_e']['error_name'] == 'data_count')]
+
+    u_bin = box_io_df['bin_name'].unique()
+
+    for idx, val in enumerate(u_bin):
+
+        data_count = box_io_df.loc[box_io_df['bin_name'] == val]['error_value'].values
+
+        if idx == 0:
+
+            box_dict = {val: data_count}
+
+        else:
+
+            box_dict[val] = data_count
+
+    box_df = pd.DataFrame(box_dict)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+
+    sns.boxplot(data=box_df, ax=ax1, palette='GnBu_d')
+    ax1.set_xticklabels(labels=['Inner Range', 'Outer Range'])
+
+    ax1.set_ylabel('10-minute data count')
+
+    base_inner_count = psd.error_df['base_bin_e'].loc[(psd.error_df['base_bin_e']['error_cat'] == 'by_range')
+                                                      & (psd.error_df['base_bin_e']['bin_name'] == 'Inner')
+                                                      & (psd.error_df['base_bin_e']['error_name'] == 'data_count')]
+
+    base_outer_count = psd.error_df['base_bin_e'].loc[(psd.error_df['base_bin_e']['error_cat'] == 'by_range')
+                                                      & (psd.error_df['base_bin_e']['bin_name'] == 'Outer')
+                                                      & (psd.error_df['base_bin_e']['error_name'] == 'data_count')]
+
+    ratio_inout_count = pd.Series([base_outer_count['error_value'].values / base_inner_count['error_value'].values])
+
+    ax2.hist(ratio_inout_count.values, color='grey')
+    ax2.set_ylabel('File count')
+    ax2.set_xlabel(r'$\mathrm{\mathsf{\frac{Outer\/\/Range\/\/data\/\/count}{Inner\/\/Range\/\/data\/\/count}}}$',
+                   fontsize=fs + 5)
+
+    ax1.text(xp_f1, yp_f1, '(a)', color='k', fontsize=fs, transform=ax1.transAxes)
+    ax2.text(xp_f1, yp_f1, '(b)', color='k', fontsize=fs, transform=ax2.transAxes)
+
+    finish_plot('meta', 'data_count', 'box_hist')
+
+def plot_file_data_count_hist_box():
+    """Mass generate histogram of file count and box plot of data count for each category.
+    Check if every sheet/method has the same file count for each inflow category.
+    """
+
+    def loop_count_histbox(by_bin, e_df, sheet_name, no_hist=None):
+
+        for idx, i_short in enumerate(sheet_name):
+
+            do_plot = False
+
+            bt_choice = 'bin_e'  # same for total_e
+
+            df = e_df[i_short + bt_choice].loc[(e_df[i_short + bt_choice]['error_cat'] == by_bin)
+                                               & (e_df[i_short + bt_choice]['error_name'] == 'data_count')]
+
+            u_bin = df['bin_name'].unique()
+
+            nan_bin_count = np.zeros(len(u_bin))
+
+            for i in range(len(df)):
+                for idx, val in enumerate(u_bin):
+                    if df.iloc[i]['bin_name'] == val:
+                        if pd.isnull(df.iloc[i]['error_value']):
+                            nan_bin_count[idx] += 1
+
+            file_num = len(df) / len(u_bin)
+            bin_count = file_num - nan_bin_count
+
+            try:
+                lump_bin_count  # see if data duplicates already
+            except NameError:
+
+                lump_bin_count = bin_count
+                lump_bin_count = np.expand_dims(lump_bin_count, axis=0)
+                do_plot = True
+
+            if lump_bin_count.shape[0] > 1:
+                for i in range(lump_bin_count.shape[0]):
+                    if np.array_equal(bin_count, lump_bin_count[i]):
+                        do_plot = False
+                    else:
+                        do_plot = True
+
+            # if data count not duplicate
+            if do_plot:
+
+                print(i_short + ' contains unique file count distribution for ' + by_bin)
+
+                file_data = {'d_bin': u_bin, 'd_count': bin_count}
+
+                hist_df = pd.DataFrame(file_data)
+
+                for idx, val in enumerate(u_bin):
+                    data_count = df.loc[df['bin_name'] == val]['error_value'].values
+                    if idx == 0:
+                        box_dict = {val: data_count}
+                    else:
+                        box_dict[val] = data_count
+
+                box_df = pd.DataFrame(box_dict)
+
+                if no_hist is None:
+
+                    no_hist = ''
+
+                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+                    sns.barplot(x='d_bin', y='d_count', data=hist_df, ax=ax1, color='orchid')
+                    ax1.set_xticklabels(labels=hist_df['d_bin'], rotation=45)
+                    ax1.set_title(str(i_short)[:-1] + ', max: ' + str(int(np.max(bin_count))) + ' files')
+                    ax1.set_xlabel(by_bin)
+                    ax1.set_ylabel('file count')
+
+                    sns.boxplot(data=box_df, ax=ax2, palette='colorblind')
+                    ax2.set_xticklabels(labels=hist_df['d_bin'], rotation=45)
+                    ax2.set_title(str(i_short)[:-1])
+                    ax2.set_xlabel(by_bin)
+                    ax2.set_ylabel('data count')
+
+                    if len(hist_df['d_bin']) > 15:  # every other xtick label
+                        for label_ax1, label_ax2 in zip(ax1.xaxis.get_ticklabels()[::2],
+                                                        ax2.xaxis.get_ticklabels()[::2]):
+                            label_ax1.set_visible(False)
+                            label_ax2.set_visible(False)
+
+                elif no_hist == 'box':
+
+                    no_hist = no_hist + '_'
+
+                    fig, ax2 = plt.subplots(figsize=(6, 5))
+
+                    sns.boxplot(data=box_df, ax=ax2, palette='colorblind')
+                    ax2.set_xticklabels(labels=hist_df['d_bin'], rotation=45)
+                    ax2.set_title(str(i_short)[:-1])
+                    ax2.set_xlabel(by_bin)
+                    ax2.set_ylabel('data count')
+
+                    if len(hist_df['d_bin']) > 15:  # every other xtick label
+                        for label_ax2 in ax2.xaxis.get_ticklabels()[::2]:
+                            label_ax2.set_visible(False)
+
+                finish_plot('meta', no_hist + by_bin + '_' + str(i_short)[:-1], 'count_hist_box')
+
+                # if i > 1:
+                lump_bin_count = np.concatenate((lump_bin_count, np.expand_dims(bin_count, axis=0)), axis=0)
+
+            else:
+
+                print(i_short + ' contains duplicating file count distribution for ' + by_bin)
+
+        del lump_bin_count
+
+    for i in range(1, len(pc.error_cat_short)):
+
+        loop_count_histbox(pc.error_cat_short[i], psd.error_df, pc.matrix_sheet_name_short)
+        loop_count_histbox(pc.error_cat_short[i], psd.extra_error_df, pc.extra_matrix_sheet_name_short)
+
+def get_outer_meta(error, meta_var, bt_c, y_var):
+
+    lump_df = pd.DataFrame()
+    lump_corr = np.zeros(0)
+
+    for i, sheet in enumerate(pc.matrix_sheet_name_short):
+
+        outer = psd.error_df[sheet+bt_c].loc[(psd.error_df[sheet+bt_c]['error_cat'] == 'by_range')
+                                             & (psd.error_df[sheet+bt_c]['bin_name'] == 'Outer')
+                                             & (psd.error_df[sheet+bt_c]['error_name'] == error)]
+
+        base = psd.error_df['base_'+bt_c].loc[(psd.error_df['base_'+bt_c]['error_cat'] == 'by_range')
+                                              & (psd.error_df['base_'+bt_c]['bin_name'] == 'Outer')
+                                              & (psd.error_df['base_'+bt_c]['error_name'] == error)]
+
+        with pd.option_context('mode.chained_assignment', None):
+
+            if sheet == 'base_':
+                outer['diff'] = np.NaN
+            else:
+                outer['diff'] = (abs(outer['error_value']) - abs(base['error_value'])) * 100
+
+            outer['sheet'] = str(sheet)[:-1]
+
+        outer_all = pd.merge(outer, meta_df, on='file_name')
+
+        if all(isinstance(x, (float, int)) for x in meta_df[meta_var]):  # if meta x-axis is numeric
+
+            corr = np.corrcoef(list(outer_all[y_var].values), list(outer_all[meta_var].values))
+
+            if not math.isnan(corr[0][1]):
+                lump_corr = np.append(lump_corr, round(corr[0][1], 2))
+
+        lump_df = pd.concat([lump_df, outer_all], sort=True)
+
+    return lump_df, lump_corr
+
+def loop_outer_diff_scatter(meta_var, one_plot=None, diff_choice=None):
+
+    if diff_choice is None:
+
+        y_var = 'error_value'
+        y_title_end = ''
+
+    else:
+
+        y_var = 'diff'
+        y_title_end = ' - Baseline'
+
+    def add_corr_text(ax, corr):
+
+        add_x = 0.13
+
+        if corr.size != 0:
+
+            ax.text(0.7, 0.94, 'correlation', color='k',
+                    weight='semibold', transform=ax.transAxes)  # ratio of axes
+
+            for idx, val in enumerate(corr):
+                ax.text(0.75, 1 - add_x, val, color=sheet_color[idx],
+                        weight='semibold', transform=ax.transAxes)
+
+                add_x += 0.07
+
+    for bt_c in pc.bt_choice:
+
+        ########################
+        ##### SKIPPING ONE #####
+        ########################
+        if meta_var != 'year_operatn':  # HARD CODED -- no useful data there
+
+            nme_df, nme_corr = get_outer_meta('nme', meta_var, bt_c, y_var)
+            nmae_df, nmae_corr = get_outer_meta('nmae', meta_var, bt_c, y_var)
+
+            if diff_choice is not None:
+
+                nme_df = nme_df.loc[~(nme_df['sheet'] == 'base')]
+                nmae_df = nmae_df.loc[~(nmae_df['sheet'] == 'base')]
+
+            nme_file_num = str(round(nme_df[meta_var].count()/len(nme_df['sheet'].unique())))[:-2]
+            nmae_file_num = str(round(nmae_df[meta_var].count()/len(nmae_df['sheet'].unique())))[:-2]
+
+            if meta_var == 'turbi_spower':  # change units for specific power
+                nme_df[meta_var] = nme_df[meta_var] * 1e3
+                nmae_df[meta_var] = nmae_df[meta_var] * 1e3
+
+            if one_plot is None:
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+            else:
+                fig, ax1 = plt.subplots(figsize=(6, 4))
+
+            axx = sns.color_palette(palette='colorblind')
+            sheet_color = axx.as_hex()
+
+            if one_plot is None:
+
+                sns.scatterplot(x=meta_var, y=y_var, hue='sheet', data=nme_df, alpha=0.5,
+                                palette='colorblind', ax=ax1, legend=False)
+
+                sns.scatterplot(x=meta_var, y=y_var, hue='sheet', data=nmae_df, alpha=0.5,
+                                palette='colorblind', ax=ax2)
+                ax2.set_xlabel(meta_var+': '+nmae_file_num+' files')
+                ax2.set_ylabel(bt_c+' nmae'+y_title_end)
+                ax2.axhline(y=0, linestyle='--', color='grey')
+                ax2.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+                add_corr_text(ax2, nmae_corr)
+
+                op_text = ''
+
+            else: # plot NMEs only
+
+                sns.scatterplot(x=meta_var, y=y_var, hue='sheet', data=nme_df, alpha=0.5,
+                                palette='colorblind', ax=ax1)
+                ax1.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+                op_text = '_one'
+
+            ax1.set_xlabel(meta_var+': '+nme_file_num+' files')
+            ax1.set_ylabel(bt_c+' nme'+y_title_end)
+            ax1.axhline(y=0, linestyle='--', color='grey')
+            add_corr_text(ax1, nme_corr)
+
+            finish_plot('results', 'scatter_diff_outer', meta_var+op_text+'_'+bt_c)
+
+def plot_outer_diff_scatter(one_plot=None, diff_choice=None):
+
+    for meta_var in pc.meta_var_names_turb:
+
+        loop_outer_diff_scatter(meta_var, one_plot=one_plot, diff_choice=diff_choice)

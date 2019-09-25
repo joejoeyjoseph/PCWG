@@ -3,6 +3,8 @@
 # - if the Excel submission format is changed
 # - if data with more error sheets are submitted
 
+import copy
+
 ### Data path
 
 data_file_path = '/Users/jlee/Documents/GitHub/PCWG_Share_03/data_03/data/'
@@ -58,6 +60,9 @@ meta_var_names = ['data_type', 'rews_def_num_h', 'rews_def_veer', 'inner_def',
                   'turbi_spower', 'turbi_control', 'year_measuremt', 'year_operatn',
                   'time_zone', 'interpolate_mode']
 
+meta_var_names_turb = copy.copy(meta_var_names)
+meta_var_names_turb.extend(['turbi_rated_power', 'turbi_d_hh_ratio'])
+
 meta_xls_names = ['Data Type [Mast, LiDAR, SoDAR, Mast & LiDAR, Mast & SoDAR]',
                   'REWS Definition - Number of Heights', 'REWS Definition - Includes Veer',
                   'Inner Range Definition [A, B or C]',
@@ -78,6 +83,9 @@ meta_xls_names = ['Data Type [Mast, LiDAR, SoDAR, Mast & LiDAR, Mast & SoDAR]',
                   'Vintage - Year of Measurement',
                   'Vintage - Year of First Operation of Turbine', 'Timezone [Local or UTC]',
                   'Interpolation Mode']
+
+meta_xls_names_turb = copy.copy(meta_xls_names)
+meta_xls_names_turb.extend(['Turbine Rated Power (MW)', 'Ratio: Rotor Diameter/Turbine Hub Height'])
 
 meta_var_grouped = {'geog_lat':'geog_lat_grouped', 'turbi_dia':'turbi_dia_grouped',
                     'turbi_hh':'turbi_hh_grouped', 'turbi_spower':'turbi_spower_grouped',

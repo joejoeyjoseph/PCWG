@@ -47,11 +47,18 @@ def get_base_e_df(error_cat):
 def get_base_total_e(error_cat):
     """Load Baseline total error data frame."""
 
-    base_total_e = error_df['base_total_e'].loc[((error_df['base_total_e']['error_cat'] == error_cat)
-                                                 | (error_df['base_total_e']['error_cat'] == 'by_range'))
-                                                & (error_df['base_total_e']['error_name'] == 'nme')]
+    base_total_e = base_total_e_df.loc[((base_total_e_df['error_cat'] == error_cat)
+                                        | (base_total_e_df['error_cat'] == 'by_range'))
+                                       & (base_total_e_df['error_name'] == 'nme')]
 
     return base_total_e
+
+def get_error_in_bin(e_df, sheet, by_bin, error_name):
+
+    out_df = e_df[sheet].loc[(e_df[sheet]['error_cat'] == by_bin)
+                             & (e_df[sheet]['error_name'] == error_name)]
+
+    return out_df
 
 def get_sheet_wsti_range_all_total_e(sheet):
     """Load NME data frame of WS-TI, Inner-Outer Range, and Overall bins."""
@@ -83,26 +90,44 @@ def cal_average_spread(df, u_bin, average_df, spread_df, sheet, rr_choice=pc.rob
 
         for idx, val in enumerate(u_bin):
 
-            average[idx] = df.loc[df['bin_name'] == val]['error_value'].mean()
-            spread[idx] = df.loc[df['bin_name'] == val]['error_value'].std()
+            average[idx] = df.loc[df['bin_name'] == val]['error_value'].mean() * 100.
+            spread[idx] = df.loc[df['bin_name'] == val]['error_value'].std() * 100.
 
     else:
 
         for idx, val in enumerate(u_bin):
 
-            average[idx] = df.loc[df['bin_name'] == val]['error_value'].median()
+            average[idx] = df.loc[df['bin_name'] == val]['error_value'].median() * 100.
 
             q1 = df.loc[df['bin_name'] == val]['error_value'].quantile(0.25)
             q3 = df.loc[df['bin_name'] == val]['error_value'].quantile(0.75)
-            spread[idx] = (q3 - q1)
+            spread[idx] = (q3 - q1) * 100.
 
     average_df[sheet] = average
     spread_df[sheet] = spread
+
+def strip_df(sheet):
 
     average_df.rename(columns={sheet: sheet.rstrip('_')},
                       inplace=True)
     spread_df.rename(columns={sheet: sheet.rstrip('_')},
                      inplace=True)
+
+def strip_df_add_file_count(sheet, df, u_bin):
+
+    average_df.rename(columns={sheet: sheet.rstrip('_') + ': ' + str(round(len(df) / len(u_bin)))},
+                      inplace=True)
+    spread_df.rename(columns={sheet: sheet.rstrip('_') + ': ' + str(round(len(df) / len(u_bin)))},
+                     inplace=True)
+
+def find_unique_bin_create_dum(series):
+
+    u_bin = series.unique()
+
+    average = np.empty(len(u_bin))
+    spread = np.empty(len(u_bin))
+
+    return (u_bin, average, spread)
 
 def get_wsti_nme_stat():
     """Get average and spread statistics for WS-TI bins."""
@@ -116,10 +141,13 @@ def get_wsti_nme_stat():
         u_bin = wsti_nme_df['bin_name'].unique()
 
         if idx == 0:
+
             average_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short])
             spread_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short])
 
         cal_average_spread(wsti_nme_df, u_bin, average_df, spread_df, sheet)
+
+        strip_df(sheet)
 
         ws_ti_df_toadd = copy.copy(wsti_nme_df)
         ws_ti_df_toadd['method'] = sheet.rstrip('_')
