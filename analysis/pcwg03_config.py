@@ -165,4 +165,9 @@ wsti_new_bin = 'ITI-OS'
 
 outws_new_bin = 'Residual'
 
+### Plotting
+
 sort_wsti_index = ['LWS-LTI', 'LWS-HTI', 'HWS-LTI', 'HWS-HTI', wsti_new_bin, 'Outer', 'Inner', 'Overall']
+
+method_dict = {'base':'Baseline', 'den_turb':'Den-Turb', 'den_2dpdm':'Den-2DPDM',
+               'den_augturb':'Den-Augturb', 'den_3dpdm':'Den-3DPDM'}

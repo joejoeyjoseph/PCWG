@@ -35,18 +35,20 @@ def remove_problematic_files(nme_df, problem_file, error_cat, new_bin):
         good_nme_df = good_nme_df.append(pd.DataFrame([[new_bin, out_lo.values[0], 'nme', error_cat, file]],
                                                       columns=good_nme_df.columns))
 
-    good_nme_df['error_value'] = good_nme_df['error_value'].astype(float) * 100
-
     good_nme_df.reset_index(inplace=True, drop=True)
 
     return good_nme_df
+
+def get_raw_energy_pct(ef_df):
+
+    return ef_df.loc[ef_df['error_name'] == 'energy_%']
 
 def check_problematic_file(ef_df, error_cat, print_state=None):
     """Check for problematic submissions with duplicating data in WS-TI bins.
     Those files yield negative ITI-OS energy count and data count.
     """
 
-    energy_pct_raw = ef_df.loc[ef_df['error_name'] == 'energy_%']
+    energy_pct_raw = get_raw_energy_pct(ef_df)
 
     problem_file = energy_pct_raw.loc[energy_pct_raw['value'] < 0]['file_name']  # problematic files
 
@@ -61,6 +63,12 @@ def check_problematic_file(ef_df, error_cat, print_state=None):
             print('none of the files are problematic')
 
     return problem_file
+
+def get_energy_pct(ef_df, error_cat):
+
+    problem_file = check_problematic_file(ef_df, error_cat)
+
+    return get_raw_energy_pct(ef_df).loc[~get_raw_energy_pct(ef_df)['file_name'].isin(problem_file)]
 
 def cal_wsti_ef(error_cat):
     """Calculate energy fraction for WS-TI bins.
@@ -165,6 +173,7 @@ def cal_check_remove_ef(error_cat, new_bin):
 
     if error_cat == 'by_ws_ti':
         ef_df = cal_wsti_ef(error_cat)
+
     elif error_cat == 'by_ws_bin_outer':
         ef_df = cal_outws_ef(error_cat)
 
@@ -175,6 +184,8 @@ def cal_check_remove_ef(error_cat, new_bin):
     base_nme_df = psd.get_base_total_e(error_cat)
 
     nme_df = remove_problematic_files(base_nme_df, problem_file, error_cat, new_bin)
+
+    nme_df['error_value'] = nme_df['error_value'].astype(float) * 100
 
     return ef_df, nme_df
 
@@ -332,6 +343,7 @@ def get_outws_ef_nme():
     outws_nme_df = pd.DataFrame()
 
     for bin_i in list(dc_ef_all_df['bin_name'].unique()):
+
         outws_nme_df = pd.concat([outws_nme_df,
                                   outws_io_nme_df.loc[outws_io_nme_df['bin_name'] == bin_i].reset_index()],
                                  axis=0)

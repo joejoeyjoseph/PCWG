@@ -3,6 +3,7 @@ import glob
 import copy
 import pandas as pd
 import numpy as np
+import itertools
 
 import pcwg03_config as pc
 import pcwg03_convert_df as pcd
@@ -53,24 +54,33 @@ def get_base_total_e(error_cat):
 
     return base_total_e
 
-def get_error_in_bin(e_df, sheet, by_bin, error_name):
+def get_error_in_bin(df, sheet, by_bin, error_name):
 
-    out_df = e_df[sheet].loc[(e_df[sheet]['error_cat'] == by_bin)
-                             & (e_df[sheet]['error_name'] == error_name)]
+    return df[sheet].loc[(df[sheet]['error_cat'] == by_bin) & (df[sheet]['error_name'] == error_name)]
+
+def get_outer_range_nme(df):
+
+    return df.loc[(df['error_cat'] == 'by_range') & (df['bin_name'] == 'Outer') & (df['error_name'] == 'nme')]
+
+def get_wsti_outer_nme(sheet, error_cat):
+
+    out_df = error_df[sheet+'total_e'].loc[((error_df[sheet+'total_e']['error_cat'] == error_cat)
+                                            | (error_df[sheet+'total_e']['bin_name'] == 'Outer'))
+                                           & (error_df[sheet+'total_e']['error_name'] == 'nme')]
 
     return out_df
 
 def get_sheet_wsti_range_all_total_e(sheet):
     """Load NME data frame of WS-TI, Inner-Outer Range, and Overall bins."""
 
-    sheet_i = sheet + 'total_e'
+    sheet_i = sheet+'total_e'
 
-    nme_df = error_df[sheet_i].loc[((error_df[sheet_i]['error_cat'] == 'by_ws_ti')
+    error_cat = 'by_ws_ti'
+
+    nme_df = error_df[sheet_i].loc[((error_df[sheet_i]['error_cat'] == error_cat)
                                     | (error_df[sheet_i]['error_cat'] == 'by_range')
                                     | (error_df[sheet_i]['error_cat'] == 'overall'))
                                    & (error_df[sheet_i]['error_name'] == 'nme')]
-
-    error_cat = 'by_ws_ti'
 
     ef_df = pef.cal_wsti_ef(error_cat)
 
@@ -106,7 +116,7 @@ def cal_average_spread(df, u_bin, average_df, spread_df, sheet, rr_choice=pc.rob
     average_df[sheet] = average
     spread_df[sheet] = spread
 
-def strip_df(sheet):
+def strip_df(average_df, spread_df, sheet):
 
     average_df.rename(columns={sheet: sheet.rstrip('_')},
                       inplace=True)
@@ -147,14 +157,14 @@ def get_wsti_nme_stat():
 
         cal_average_spread(wsti_nme_df, u_bin, average_df, spread_df, sheet)
 
-        strip_df(sheet)
+        strip_df(average_df, spread_df, sheet)
 
         ws_ti_df_toadd = copy.copy(wsti_nme_df)
         ws_ti_df_toadd['method'] = sheet.rstrip('_')
         all_wsti_nme_df = pd.concat([all_wsti_nme_df, ws_ti_df_toadd], axis=0)
         all_wsti_nme_df.reset_index(inplace=True, drop=True)
 
-    return all_wsti_nme_df
+    return average_df, spread_df, all_wsti_nme_df
 
 def get_outws_nme_stat():
     """Get average and spread statistics for Outer Range WS bins."""
@@ -246,28 +256,92 @@ def remove_0_in_label(df):
 
     return x_sorted, x_nozero
 
-def group_meta_element(key, value):
-    """Split meta data into groups."""
+def get_outer_meta(error, meta_var, bt_c, y_var):
+    """Find error for each method, calculate difference from Baseline.
+    Correlate error with meta data variables, if they are numerically represented.
+    """
 
-    series_to_edit = meta_df[key]
-    tickmark_lim = np.linspace(series_to_edit.min(), series_to_edit.max(), 10)
-    series_edited = np.empty(len(series_to_edit))
+    lump_df = pd.DataFrame()
+    lump_corr = np.zeros(0)
 
-    for i in range(len(series_to_edit)):
+    for i, sheet in enumerate(pc.matrix_sheet_name_short):
 
-        for j in range(len(tickmark_lim) - 1):
+        outer = error_df[sheet+bt_c].loc[(error_df[sheet+bt_c]['error_cat'] == 'by_range')
+                                         & (error_df[sheet+bt_c]['bin_name'] == 'Outer')
+                                         & (error_df[sheet+bt_c]['error_name'] == error)]
 
-            if series_to_edit[i] >= tickmark_lim[j] and series_to_edit[i] <= tickmark_lim[j + 1]:
+        base = error_df['base_'+bt_c].loc[(error_df['base_'+bt_c]['error_cat'] == 'by_range')
+                                          & (error_df['base_'+bt_c]['bin_name'] == 'Outer')
+                                          & (error_df['base_'+bt_c]['error_name'] == error)]
 
-                series_edited[i] = (tickmark_lim[j] + tickmark_lim[j + 1]) / 2
+        with pd.option_context('mode.chained_assignment', None):
 
-            if np.isnan(series_to_edit[i]):
+            if sheet == 'base_':
 
-                series_edited[i] = np.nan
+                outer['diff'] = np.NaN
 
-    if key == 'turbi_spower':  # change units for specific power
+            # calculate difference between correction methods and Baseline
+            else:
 
-        series_edited = series_edited * 1e3
+                outer['diff'] = (abs(outer['error_value']) - abs(base['error_value'])) * 100
 
-    meta_df[value] = np.round(series_edited, 2)
+            outer['sheet'] = str(sheet)[:-1]
 
+        outer_all = pd.merge(outer, meta_df, on='file_name')
+
+        if all(isinstance(x, (float, int)) for x in meta_df[meta_var]): # if meta x-axis is numeric
+
+            corr = np.corrcoef(list(outer_all[y_var].values), list(outer_all[meta_var].values))
+
+            if not math.isnan(corr[0][1]):
+
+                lump_corr = np.append(lump_corr, round(corr[0][1], 2))
+
+        lump_df = pd.concat([lump_df, outer_all], sort=True)
+
+    return lump_df, lump_corr
+
+def get_nme_diff_range():
+
+    outer_base_te_df = get_outer_range_nme(base_total_e_df)
+    outer_dt_te_df = get_outer_range_nme(error_df['den_turb_total_e'])
+    outer_d2_te_df = get_outer_range_nme(error_df['den_2dpdm_total_e'])
+    outer_dat_te_df = get_outer_range_nme(error_df['den_augturb_total_e'])
+    outer_d3_te_df = get_outer_range_nme(error_df['den_3dpdm_total_e'])
+
+    for idx, file in enumerate(outer_base_te_df['file_name'].unique()):
+
+        base_nme = outer_base_te_df.loc[outer_base_te_df['file_name'] == file]['error_value'].values[0] * 100.
+        dt_nme = outer_dt_te_df.loc[outer_dt_te_df['file_name'] == file]['error_value'].values[0] * 100.
+        d2_nme = outer_d2_te_df.loc[outer_d2_te_df['file_name'] == file]['error_value'].values[0] * 100.
+        dat_nme = outer_dat_te_df.loc[outer_dat_te_df['file_name'] == file]['error_value'].values[0] * 100.
+        d3_nme = outer_d3_te_df.loc[outer_d3_te_df['file_name'] == file]['error_value'].values[0] * 100.
+
+        method_nme_list = np.array([abs(dt_nme), abs(d2_nme), abs(dat_nme), abs(d3_nme)])
+
+        nme_diff = method_nme_list - abs(base_nme)
+
+        if idx == 0:
+            nme_diff_list = nme_diff
+
+        else:
+            nme_diff_list = np.vstack((nme_diff_list, nme_diff))
+
+    nme_diff_df = pd.DataFrame(nme_diff_list.T)
+
+    nme_range = nme_diff_df.max() - nme_diff_df.min()
+
+    improve_outer_list = ['Mixed'] * nme_diff_df.shape[1]
+
+    for col in range(nme_diff_df.shape[1]):
+
+        if all(item > 0 for item in nme_diff_df[col]):
+            improve_outer_list[col] = 'Worse'
+
+        elif all(item < 0 for item in nme_diff_df[col]):
+            improve_outer_list[col] = 'Improved'
+
+    nme_range_p_df = pd.DataFrame({'nme': nme_range, 'all': improve_outer_list})
+    nme_range_p_df.reset_index(inplace=True)
+
+    return nme_diff_df, nme_range_p_df
