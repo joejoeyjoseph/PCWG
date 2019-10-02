@@ -32,6 +32,8 @@ plt.rcParams.update({'font.size': fs})
 
 xp_f1, yp_f1 = 0.04, 0.93 # x, y positions
 
+fmt_code = '.1f' # for bootstrap ttest mean heatmap
+
 def save_plot(sub_dir, var, plot_type, pdf=True):
     """Export figure to either pdf or png file."""
 
@@ -1234,4 +1236,330 @@ def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=Fals
 
         finish_plot('results', error_cat+'_pct_ttest_ftest_'+plot_name_ro, 'heatmap', tight_layout=False)
 
+        plt.rcParams.update({'font.size': fs})
+
+def loop_ecat_pct_ttest_ftest_heatmap():
+
+    for i in pc.error_cat_short[1:]:
+        plot_ecat_pct_ttest_ftest_heatmap(error_cat=i)
+
+def plot_ediff_hist_kstest():
+
+    for idx, (b_or_t, error, error_cat) in enumerate(itertools.product(pc.bt_choice, pc.error_name[1:],
+                                                                       pc.error_cat_short)):
+
+        base_df = p_init.error_df['base_' + b_or_t]
+        base_df_s = base_df.loc[(base_df['error_cat'] == error_cat) & (base_df['error_name'] == error)]
+        u_bin = base_df_s['bin_name'].unique()
+
+        for b_name in u_bin:
+
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ks_str = None
+
+            for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
+
+                method_df = p_init.error_df[method_sheet+b_or_t]
+                method_df_s = method_df.loc[(method_df['error_cat'] == error_cat)
+                                            & (method_df['error_name'] == error)]
+
+                base_array = psd.get_bin_array(base_df_s, b_name)
+                method_array = psd.get_bin_array(method_df_s, b_name)
+
+                base_na = psd.drop_array_na(base_array)
+                method_na = psd.drop_array_na(method_array)
+
+                if all(base_na) == all(method_na):  # ensure the nan's are at the same indices
+
+                    # need 2 samples to do stat tests
+                    if (len(base_array.dropna()) > 1) and (len(method_array.dropna()) > 1):
+
+                        # individual improvement, negative means improved
+                        # compare absolute value of NME
+                        diff_array = (abs(method_array.dropna()) - abs(base_array.dropna())) * 100
+
+                        sns.distplot(list(diff_array.values), ax=ax, kde=False, label=str(method_sheet)[:-1])
+                        ax.set_xlabel('Error difference from Baseline (%)')
+                        ax.set_ylabel('Count')
+
+                        if psd.perform_kstest(diff_array) is True:
+                            pass
+                        else:
+                            print(method_sheet+' '+error_cat+' '+b_name+' '+b_or_t+' '+error
+                                  +' does NOT differ from Gaussian with statistical significance')
+
+                            if ks_str is None:
+                                ks_str = '\n NOT differ from Gasussian: \n'
+                            ks_str += method_sheet+' '
+
+                    else:
+                        print(method_sheet+' '+error_cat+' '+b_name+' '+b_or_t+' '+error
+                              +' has insufficient samples to perform KS test')
+
+            if ks_str is None:
+                ks_str = '\n all methods differ from Gaussian'
+
+            ax.set_title(error_cat+' '+b_name+' '+b_or_t+' '+error+': '+ks_str)
+
+            plt.legend()
+
+            finish_plot('results', error_cat+' '+b_name+' '+b_or_t+' '+error, 'hist_kstest')
+
+def plot_filter_outlier_kde():
+    """Produce kde plot for NME distributions.
+    2 plots, before and after outlier filtering."""
+
+    plt.rcParams.update({'font.size': f14})
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 5))
+
+    line_fill_c = ['black', 'blue', 'dodgerblue', 'grey']
+    str_f6 = ['Den-Turb', 'Den-2DPDM', 'Den-Augturb', 'Den-3DPDM']
+
+    f6_xlim = [-2.5, 1.5]
+    f6_ylim = [0, 1.4]
+
+    def print_kstest_result(arr, method_sheet):
+
+        if psd.perform_kstest(arr) is True:
+            print(method_sheet + ' differs from Gaussian with statistical significance')
+        else:
+            print(method_sheet + ' does NOT differ from Gaussian with statistical significance')
+
+    for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
+
+        base_df = p_init.error_df['base_' + 'total_e']
+        base_df_s = base_df.loc[(base_df['error_cat'] == 'overall') & (base_df['error_name'] == 'nme')]
+        #u_bin = base_df_s['bin_name'].unique()
+
+        method_df = p_init.error_df[method_sheet + 'total_e']
+        method_df_s = method_df.loc[(method_df['error_cat'] == 'overall') & (method_df['error_name'] == 'nme')]
+
+        base_array = psd.get_bin_array(base_df_s, 'ALL')
+        method_array = psd.get_bin_array(method_df_s, 'ALL')
+
+        base_na = psd.drop_array_na(base_array)
+        method_na = psd.drop_array_na(method_array)
+
+        if (all(base_na) == all(method_na)) and (len(base_array.dropna()) > 1) and (len(method_array.dropna()) > 1):
+            # individual improvement, negative means improved
+            # compare absolute value of NME
+            diff_array = (abs(method_array.dropna()) - abs(base_array.dropna())) * 100
+
+            # sns.distplot(list(diff_array.values), ax=ax1, kde=False, hist=None, fit=stats.norm,
+            #              label=str(method_sheet)[:-1])
+            sns.kdeplot(list(diff_array.values), ax=ax1, color=line_fill_c[method_num], shade=True,
+                        label=str_f6[method_num])
+
+            ax1.set_xlabel('|NME| difference (%)')
+            ax1.set_ylabel('Probability density')
+            # ax1.set_title(error_cat+' '+bin_name+' '+error)
+            ax1.set_xlim(f6_xlim)
+            ax1.set_ylim(f6_ylim)
+            ax1.axvline(0, ls='--', color='grey')
+            ax1.text(0.9, 0.93, '(a)', color='k', fontsize=f14, transform=ax1.transAxes)
+
+            print_kstest_result(diff_array, method_sheet)
+
+            diff_data_no_outlier = psd.remove_quantile_in_array(diff_array)
+
+            # sns.distplot(list(diff_data_no_outlier.values), ax=ax2, kde=False, hist=None, fit=stats.norm,
+            #              label=str(method_sheet)[:-1])
+            sns.kdeplot(list(diff_data_no_outlier.values), ax=ax2, color=line_fill_c[method_num], shade=True,
+                        label=str_f6[method_num], legend=False)
+
+            ax2.set_xlabel('|NME| difference (%)')
+            ax2.set_ylabel('')
+            # ax2.set_title(error_cat+' '+bin_name+' '+b_or_t+' '+error)
+            ax2.set_xlim(f6_xlim)
+            ax2.set_ylim(f6_ylim)
+            ax2.axvline(0, ls='--', color='grey')
+            ax2.text(0.9, 0.93, '(b)', color='k', fontsize=f14, transform=ax2.transAxes)
+
+            print_kstest_result(diff_data_no_outlier, method_sheet)
+
+    ax1.legend()
+
+    finish_plot('results', 'filter_overall_nme', '2kde')
+
+    plt.rcParams.update({'font.size': fs})
+
+def plot_filter_outlier_panel_kde_hist():
+
+    def get_outer_2bins_nme(method):
+
+        te_df = p_init.error_df[method+'_total_e']
+        outws01 = te_df.loc[(te_df['error_cat'] == 'by_ws_bin_outer') & (te_df['bin_name'] == '0.0-0.1')
+                            & (te_df['error_name'] == 'nme')]
+        outws15 = te_df.loc[(te_df['error_cat'] == 'by_ws_bin_outer') & (te_df['bin_name'] == '1.4-1.5')
+                            & (te_df['error_name'] == 'nme')]
+        outws01_val = outws01['error_value'].dropna() * 100
+        outws15_val = outws15['error_value'].dropna() * 100
+
+        return outws01_val, outws15_val
+
+    dat_outws01_val, dat_outws15_val = get_outer_2bins_nme('den_augturb')
+    base_outws01_val, base_outws15_val = get_outer_2bins_nme('base')
+
+    nme_diff_01 = pd.to_numeric((abs(dat_outws01_val) - abs(base_outws01_val)))
+    nme_diff_15 = pd.to_numeric((abs(dat_outws15_val) - abs(base_outws15_val)))
+
+    bottom_01 = nme_diff_01.quantile(pc.quantile_cut)  # bottom x%
+    # nme_diff_01_cut = nme_diff_01.drop((nme_diff_01[nme_diff_01.values < bottom_01].index))
+
+    bottom_15 = nme_diff_15.quantile(pc.quantile_cut)
+
+    plt.rcParams.update({'font.size': f14})
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(11, 7))
+
+    dat_c, base_c, diff_c = 'dodgerblue', 'darkviolet', 'orange'
+
+    sns.kdeplot(pd.to_numeric(base_outws01_val), ax=ax1, label='Baseline', color=base_c, shade=True)
+    sns.kdeplot(pd.to_numeric(dat_outws01_val), ax=ax1, label='Den-Augturb', color=dat_c, shade=True)
+    ax1.set_ylabel('Probability density')
+    ax1.set_xlabel('NME (%)')
+
+    sns.kdeplot(pd.to_numeric(base_outws15_val), ax=ax2, label='Baseline', legend=False, color=base_c, shade=True)
+    sns.kdeplot(pd.to_numeric(dat_outws15_val), ax=ax2, label='Den-Augturb', legend=False, color=dat_c, shade=True)
+    ax2.set_ylabel('Probability density')
+    ax2.set_xlabel('NME (%)')
+
+    sns.distplot(nme_diff_01, ax=ax3, kde=False, hist_kws={'color': diff_c, 'alpha': 0.8}, bins=10)
+    # sns.distplot(nme_diff_01_cut, ax=ax3, kde=False, hist_kws={'color':'k', 'alpha':0.8}, bins=9)
+    # ax3.set_xlim(nme_diff_01.min(), nme_diff_01.max())
+    # ax3.fill_between(0, 1, where=(<0), interpolate=True, color='#EF9A9A')
+    # ax3.set_facecolor('k')
+    ax3.axvline(0, ls='--', color='grey')
+    ax3.axvline(bottom_01, ls='--', color='red')
+    ax3.set_ylabel('Count')
+    ax3.set_xlabel('|NME| difference (%)')
+
+    sns.distplot(nme_diff_15, ax=ax4, kde=False, hist_kws={'color': diff_c, 'alpha': 0.8})
+    ax4.axvline(0, ls='--', color='grey')
+    ax4.axvline(bottom_15, ls='--', color='red')
+    ax4.set_ylabel('Count')
+    ax4.set_xlabel('|NME| difference (%)')
+
+    fo_xp, fo_yp = 0.04, 0.9
+
+    ax1.text(fo_xp, fo_yp, '(a)', color='k', fontsize=f14, transform=ax1.transAxes)
+    ax2.text(fo_xp, fo_yp, '(b)', color='k', fontsize=f14, transform=ax2.transAxes)
+    ax3.text(fo_xp, fo_yp, '(c)', color='k', fontsize=f14, transform=ax3.transAxes)
+    ax4.text(fo_xp, fo_yp, '(d)', color='k', fontsize=f14, transform=ax4.transAxes)
+
+    ax1.set_title('Normalized wind speed: 0-0.1', fontsize=f14)
+    ax2.set_title('Normalized wind speed: 1.4-1.5', fontsize=f14)
+
+    finish_plot('results', 'filter_overall_nme', '2kde')
+
+    plt.rcParams.update({'font.size': fs})
+
+def plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df):
+
+    plt.rcParams.update({'font.size': f14})
+
+    gs = gridspec.GridSpec(190, 28)
+
+    plt.subplots(figsize=[12, 10])
+
+    top_start, top_end = 0, 120
+    center_left = 12
+
+    ax11 = plt.subplot(gs[top_start:top_end, 0:center_left])
+    ax12 = plt.subplot(gs[top_end + 4:, 0:center_left])
+    ax2 = plt.subplot(gs[top_start:, center_left + 4:])
+
+    wsti_df1 = wsti_df.iloc[0:5]
+    wsti_df2 = wsti_df.iloc[5:]
+
+    sns.heatmap(wsti_df1, linewidths=.5, cmap='Greys', vmin=0, vmax=2, ax=ax11, annot=False, cbar=False,
+                fmt=fmt_code)
+    ax11.yaxis.set_tick_params(rotation=0)
+    ax11.set_ylabel('WS-TI bin')
+    ax11.set_xlabel('')
+    ax11.set(xticklabels=[])
+    ax11.tick_params(bottom=False)
+
+    sns.heatmap(wsti_df2, linewidths=.5, cmap='Greys', vmin=0, vmax=2, ax=ax12, annot=False, cbar=False,
+                fmt=fmt_code)
+    ax12.yaxis.set_tick_params(rotation=0)
+    # ax12.set_title('Percentage of individual improvement')
+    ax12.set_ylabel('Inner-Outer Range')
+    ax12.set_xlabel('Correction method')
+    ax12.xaxis.set_tick_params(rotation=30)
+
+    sns.heatmap(outws_df, linewidths=.5, cmap='Greys', vmin=0, vmax=2, ax=ax2, annot=False, cbar=False,
+                fmt=fmt_code, cbar_kws={'label': 'Fraction of bootstrapped means passing t-test (%)'})
+    ax2.yaxis.set_tick_params(rotation=0)
+    ax2.set_ylabel('Normalized Outer-Range wind-speed bin')
+    ax2.set_xlabel('Correction method')
+    # ax2.set(yticklabels=[])
+    ax2.xaxis.set_tick_params(rotation=30)
+
+    f9_xp, f9_yp = 0., -0.14
+
+    ax12.text(f9_xp, -0.415, '(a)', color='k', fontsize=f14, transform=ax12.transAxes)
+    ax2.text(f9_xp, -0.143, '(b)', color='k', fontsize=f14, transform=ax2.transAxes)
+
+    ax2_c = sns.color_palette(palette='Greys').as_hex()
+    ax12.text(0.5, -0.57, 'Method improves from Baseline on average', color=ax2_c[3], fontsize=f14, ha='center',
+              weight='semibold', transform=ax12.transAxes)
+    ax2.text(0.5, -0.2, 'Method improves significantly on average', color=ax2_c[-1], fontsize=f14, ha='center',
+             weight='semibold', transform=ax2.transAxes)
+
+    finish_plot('results', 'bootstrap_ttest_wsti_outws', 'heatmap', tight_layout=False)
+
+    plt.rcParams.update({'font.size': fs})
+
+def plot_wsti_outws_bootstrap_ttest_heatmap(remove_outlier=None, wilcoxon=None, hypo_test=None):
+
+    dum1, dum2, wsti_nme_df = psd.get_wsti_nme_stat()
+    outws_nme_df = psd.get_methods_nme('by_ws_bin_outer')
+
+    wsti_df = psd.do_ttest_boot(wsti_nme_df,
+                                psd.cal_bootstrap_means(wsti_nme_df, remove_outlier=remove_outlier,
+                                                        hypo_test=hypo_test),
+                                wsti=True, wilcoxon=wilcoxon, hypo_test=hypo_test)
+
+    outws_df = psd.do_ttest_boot(outws_nme_df,
+                                 psd.cal_bootstrap_means(outws_nme_df, remove_outlier=remove_outlier,
+                                                         hypo_test=hypo_test),
+                                 wilcoxon=wilcoxon, hypo_test=hypo_test)
+
+    plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df)
+
+def plot_ecat_boot_ttest_mean(df, error_cat):
+
+    fig, ax = plt.subplots(figsize=(6, 7))
+
+    sns.heatmap(df, linewidths=.5, cmap='Greys', vmin=0, vmax=2, ax=ax, annot=False, cbar=False,
+                fmt=fmt_code, cbar_kws={'label': 'Fraction of bootstrapped means passing t-test (%)'})
+    ax.yaxis.set_tick_params(rotation=0)
+    ax.set_ylabel(error_cat)
+    ax.set_xlabel('Correction method')
+    ax.xaxis.set_tick_params(rotation=30)
+
+    ax_c = sns.color_palette(palette='Greys').as_hex()
+    ax.text(0.5, -0.25, 'Method improves from Baseline on average', color=ax_c[3], fontsize=fs, ha='center',
+            weight='semibold', transform=ax.transAxes)
+    ax.text(0.5, -0.3, 'Method improves significantly on average', color=ax_c[-1], fontsize=fs, ha='center',
+            weight='semibold', transform=ax.transAxes)
+
+    plt.show()
+
+def plot_ecat_bootstrap_ttest_heatmap(error_cat, remove_outlier=None, wilcoxon=None, hypo_test=None):
+
+    nme_df = psd.get_methods_nme(error_cat)
+
+    plot_df = psd.do_ttest_boot(nme_df,
+                                psd.cal_bootstrap_means(nme_df, remove_outlier=remove_outlier, hypo_test=hypo_test),
+                                wilcoxon=wilcoxon, hypo_test=hypo_test)
+
+    plot_ecat_boot_ttest_mean(plot_df, error_cat)
+
+def loop_ecat_bootstrap_ttest_heatmap():
+
+    for i in pc.error_cat_short[1:]:
+        plot_ecat_bootstrap_ttest_heatmap(error_cat=i)
 

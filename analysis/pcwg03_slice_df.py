@@ -4,6 +4,7 @@ import numpy as np
 import itertools
 import math
 from scipy import stats
+from sklearn.utils import resample
 
 import pcwg03_initialize as p_init
 
@@ -338,6 +339,26 @@ def get_methods_nme(error_cat):
 
     return all_outws_nme_df
 
+def extract_base_df_s(df):
+
+    base_df = df.loc[df['method'] == 'base']
+
+    return base_df.reset_index()
+
+def extract_method_df_s(sheet, df):
+
+    method_df = df.loc[df['method'] == sheet.rstrip('_')]
+
+    return method_df.reset_index()
+
+def get_bin_array(df_s, bin_name):
+
+    return df_s.loc[(df_s['bin_name'] == bin_name)]['error_value']
+
+def drop_array_na(arr):
+
+    return arr.loc[(pd.isna(arr) == True)].index
+
 def perform_stat_test(wsti=False, error_cat=None,
                       remove_outlier_choice=False, remove_quantile=False, bonferroni=None, percent_thres=None):
 
@@ -351,15 +372,11 @@ def perform_stat_test(wsti=False, error_cat=None,
         else:
             nme_df = get_methods_nme(error_cat)
 
+    base_df_s = extract_base_df_s(nme_df)
+
     for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
 
-        base_df = nme_df.loc[nme_df['method'] == 'base']
-
-        i_short = method_sheet.rstrip('_')
-        method_df = nme_df.loc[nme_df['method'] == i_short]
-
-        base_df_s = base_df.reset_index()
-        method_df_s = method_df.reset_index()
+        method_df_s = extract_method_df_s(method_sheet, nme_df)
 
         if (base_df_s['file_name'].values != method_df_s['file_name'].values).all():
             print('file names in baseline and method df do not match!')
@@ -371,6 +388,7 @@ def perform_stat_test(wsti=False, error_cat=None,
         ftest = np.zeros(len(u_bin))
 
         if method_num == 0:
+
             pc_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
             diff_ttest_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
             ftest_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
@@ -378,18 +396,11 @@ def perform_stat_test(wsti=False, error_cat=None,
 
         for idx, val in enumerate(u_bin):
 
-            base_array = base_df_s.loc[(base_df_s['bin_name'] == val)]['error_value']
-            method_array = method_df_s.loc[(method_df_s['bin_name'] == val)]['error_value']
+            base_array = get_bin_array(base_df_s, val)
+            method_array = get_bin_array(method_df_s, val)
 
-            if pd.isna(base_array) is True:
-                base_na = base_array.loc[(pd.isna(base_array) is True)].index
-            else:
-                base_na = np.zeros(len(u_bin))
-
-            if pd.isna(method_array) is True:
-                method_na = method_array.loc[(pd.isna(method_array) is True)].index
-            else:
-                method_na = np.zeros(len(u_bin))
+            base_na = drop_array_na(base_array)
+            method_na = drop_array_na(method_array)
 
             # Bonferroni Correction, aka make alpha smaller dependent on the number of stat tests
             if bonferroni == 1:  # looser, because each method is independent
@@ -425,11 +436,7 @@ def perform_stat_test(wsti=False, error_cat=None,
                     if remove_outlier_choice is True:
 
                         if remove_quantile is True:  # remove x percent of "extreme" improvement
-                            quantile_cut = 0.1
-                            bottom = diff_array.quantile(quantile_cut)  # bottom 10%
-                            diff_data_no_outlier = diff_array.drop((diff_array[diff_array.values < bottom].index))
-                            #print(len(diff_data_no_outlier))
-                            #print(len(diff_array) - len(diff_data_no_outlier))
+                            diff_data_no_outlier = remove_quantile_in_array(diff_array)
 
                         else:
                             # remove "extreme" improvements above 1 percent of absolute magnitude
@@ -523,15 +530,207 @@ def perform_stat_test(wsti=False, error_cat=None,
         ftest_df.rename(columns={method_sheet: method_sheet.rstrip('_')},
                         inplace=True)
 
-        if wsti is True:
+    if wsti is True:
 
-            pc_df = sort_plot_wsti_df_index(pc_df)
-            diff_ttest_df = sort_plot_wsti_df_index(diff_ttest_df)
-            ftest_df = sort_plot_wsti_df_index(ftest_df)
+        pc_df = sort_plot_wsti_df_index(pc_df)
+        diff_ttest_df = sort_plot_wsti_df_index(diff_ttest_df)
+        ftest_df = sort_plot_wsti_df_index(ftest_df)
 
-        pc_df.rename(columns=pc.method_dict, inplace=True)
-        diff_ttest_df.rename(columns=pc.method_dict, inplace=True)
-        ftest_df.rename(columns=pc.method_dict, inplace=True)
+    pc_df.rename(columns=pc.method_dict, inplace=True)
+    diff_ttest_df.rename(columns=pc.method_dict, inplace=True)
+    ftest_df.rename(columns=pc.method_dict, inplace=True)
 
     return plot_choice, pc_df, diff_ttest_df, ftest_df, diff_removal_num
+
+def perform_kstest(arr):
+    """Perform KS test: array distribution is different from Gaussian or not."""
+
+    ks_stat = stats.kstest(list(arr.values), 'norm')
+
+    if ks_stat.pvalue <= pc.alpha_choice:
+        # reject KS test result, array differs from Gaussian with statistical significance
+        out = True
+    else:
+        out = False
+
+    return out
+
+def remove_quantile_in_array(arr):
+
+    bottom = arr.quantile(pc.quantile_cut)  # bottom x%
+
+    return arr.drop((arr[arr.values < bottom].index))
+
+
+def run_bootstrap(data, n):
+
+    out = np.zeros(0)
+    boot_count = 0
+
+    while boot_count < pc.boot_loop_num:
+        sample = resample(data, replace=True, n_samples=n)
+
+        # get list of means
+        out = np.append(out, sample.mean())
+
+        boot_count += 1
+
+    return out
+
+def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
+
+    ref_df = df_boot.loc[df_boot['method'] == 'base']
+    u_bin = ref_df['bin_name'].unique()
+
+    if hypo_test is False:
+        diff_boot_mean_mat = np.empty((len(pc.matrix_sheet_name_short[1:]), len(u_bin), int(pc.boot_loop_num)))
+    else:
+        diff_boot_mean_mat = np.empty((len(pc.matrix_sheet_name_short[1:]), len(u_bin), int(pc.boot_loop_num), 2))
+
+    base_df_s = extract_base_df_s(df_boot)
+
+    for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
+
+        method_df_s = extract_method_df_s(method_sheet, df_boot)
+
+        if (base_df_s['file_name'].values != method_df_s['file_name'].values).all():
+            print('file names in baseline and method df do not match!')
+
+        diff_removal_num = np.zeros(0)
+
+        for idx, val in enumerate(u_bin):
+
+            base_array = get_bin_array(base_df_s, val)
+            method_array = get_bin_array(method_df_s, val)
+
+            base_na = drop_array_na(base_array)
+            method_na = drop_array_na(method_array)
+
+            if all(base_na) == all(method_na):  # ensure the nan's are at the same indices
+
+                base_data = (base_array.dropna()) * 100.
+                method_data = (method_array.dropna()) * 100.
+
+                base_data_dum = copy.deepcopy(base_data)
+                method_data_dum = copy.deepcopy(method_data)
+
+                # need 2 samples to do stat tests
+                if (len(base_data) > 1) and (len(method_data) > 1):
+
+                    # individual improvement, negative means improved
+                    # compare absolute value of NME
+                    diff_array = (abs(method_data_dum) - abs(base_data_dum))
+
+                    diff_data_dum = copy.deepcopy(diff_array)
+
+                    # make t test more rigorous by removing data points of "extreme" improvement
+                    # only use 10% quantile here
+                    if remove_outlier is True:
+
+                        diff_data_no_outlier = remove_quantile_in_array(diff_array)
+
+                        # number of removed submissions
+                        diff_removal = len(diff_array) - len(diff_data_no_outlier)
+                        diff_removal_num = np.append(diff_removal_num, diff_removal)
+
+                        if diff_removal > 0:
+                            diff_data_dum = diff_data_no_outlier
+
+                    if hypo_test is False:
+                        # bootstrap means from original sample
+                        diff_boot_mean_mat[method_num, idx, :] = run_bootstrap(diff_data_dum, len(diff_data_dum))
+
+                    else:
+                        # bootstrap means from edited sample
+                        new_diff = diff_data_dum - diff_data_dum.mean()
+
+                        diff_boot_mean_mat[method_num, idx, :, 0] = run_bootstrap(new_diff, len(diff_data_dum))
+                        diff_boot_mean_mat[method_num, idx, :, 1] = diff_data_dum.mean()
+
+                else:
+                    print('warning!!! less than 2 samples in bin '+val)
+
+            else:
+                print('warning!!! baseline & method arrays do not match!!!')
+
+    return diff_boot_mean_mat
+
+def do_ttest_boot(df_boot, diff_boot_array, wsti=False, wilcoxon=False, hypo_test=False):
+
+    ref_df = df_boot.loc[df_boot['method'] == 'base']
+    u_bin = ref_df['bin_name'].unique()
+
+    for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
+
+        diff_test = np.zeros(len(u_bin))
+
+        if method_num == 0:
+            diff_test_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
+
+        for idx, val in enumerate(u_bin):
+
+            if hypo_test is False:
+
+                # t test
+                # mean diff of individual error < diff_benchmark
+                if diff_boot_array[method_num, idx, :].mean() < pc.diff_benchmark:
+                    diff_test[idx] += 1
+
+                    # some error categories do not have enough data
+                    # hence t test may fail after outlier removal
+                    if wilcoxon is False: # do t-test
+
+                        try:
+                            diff_t_stat = stats.ttest_1samp(diff_boot_array[method_num, idx, :], pc.diff_benchmark)
+
+                        except ZeroDivisionError:
+                            class diff_t_stat:
+                                statistic = np.nan
+                                pvalue = np.nan
+
+                        # one-sample, one-sided t test
+                        # reject H0: no diff, or diff = 0
+                        # Ha: mean diff of individual error < diff_benchmark
+                        if ((diff_t_stat.statistic < 0)  # t-statistic < 0 (differ from diff_benchmark)
+                                & (diff_t_stat.pvalue / 2 <= pc.alpha_choice)):  # one-sided, half of p-value
+                            # use alpha_choice instead of alpha_thres here -- no need to use Bonferroni
+
+                            # mean diff of individual error < diff_benchmark *significantly*
+                            diff_test[idx] += 1
+                    else:
+
+                        try:
+                            diff_w_stat = stats.wilcoxon(diff_boot_array[method_num, idx, :])
+
+                        except ZeroDivisionError:
+                            class diff_w_stat:
+                                statistic = np.nan
+                                pvalue = np.nan
+
+                        if (diff_w_stat.pvalue / 2 <= pc.alpha_choice):
+                            diff_test[idx] += 1
+
+            else:
+
+                mean_to_compare = np.unique(diff_boot_array[method_num, idx, :, 1])[0]
+
+                outside_prob = ((np.sum(diff_boot_array[method_num, idx, :, 0] < -abs(mean_to_compare))
+                                 + np.sum(diff_boot_array[method_num, idx, :, 0] > abs(mean_to_compare)))
+                                / pc.boot_loop_num)
+
+                # bootstrap hypothesis
+                if outside_prob < pc.alpha_choice:
+                    diff_test[idx] += 2
+
+        diff_test_df[method_sheet] = diff_test
+
+        diff_test_df.rename(columns={method_sheet: method_sheet.rstrip('_')}, inplace=True)
+
+    diff_test_df.rename(columns=pc.method_dict, inplace=True)
+
+    if wsti == True:
+
+        diff_test_df = sort_plot_wsti_df_index(diff_test_df)
+
+    return diff_test_df
 

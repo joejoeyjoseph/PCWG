@@ -162,6 +162,8 @@ alpha_thres_wsti_list = [1, 2, 2, 5, 5, 5, 5, 5]
 
 quantile_cut = 0.1
 
+boot_loop_num = 1e2 # 1e4
+
 ### Filtering
 
 nme_filter_thres = 1 # in percent
