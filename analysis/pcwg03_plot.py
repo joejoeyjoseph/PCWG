@@ -1,33 +1,30 @@
 import os
+import numpy as np
+import pandas as pd
+import itertools
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
 
-import numpy as np
-import pandas as pd
-import math
-import itertools
-
 import geopandas as gpd
 from descartes import PolygonPatch
+
+import pcwg03_initialize as p_init
 
 import pcwg03_config as pc
 import pcwg03_convert_df as pcd
 import pcwg03_energy_fraction as pef
 import pcwg03_slice_df as psd
 
-meta_df = psd.meta_df
+meta_df = p_init.meta_df
 
 save_fig = pc.save_fig
 
 dpi_choice = 600 # output plot resolution
 
-py_file_path = os.getcwd()
-# put generated plots near code
-out_plot_path = py_file_path+'/plots/'
-
 fs = 12
+f14 = 14
 f15 = 15
 f16 = 16
 
@@ -38,18 +35,18 @@ xp_f1, yp_f1 = 0.04, 0.93 # x, y positions
 def save_plot(sub_dir, var, plot_type, pdf=True):
     """Export figure to either pdf or png file."""
 
-    if not os.path.exists(out_plot_path+'/'+ sub_dir):
+    if not os.path.exists(p_init.out_plot_path+'/'+ sub_dir):
 
-        os.makedirs(out_plot_path+'/'+sub_dir)
+        os.makedirs(p_init.out_plot_path+'/'+sub_dir)
 
     if pdf is True:
 
-        plt.savefig(out_plot_path+sub_dir+'/'+var+'_'+plot_type+'.pdf',
+        plt.savefig(p_init.out_plot_path+sub_dir+'/'+var+'_'+plot_type+'.pdf',
                     bbox_inches='tight', dpi=dpi_choice)
 
     else:
 
-        plt.savefig(out_plot_path+'/'+sub_dir+'/'+var+'_'+plot_type+'.png',
+        plt.savefig(p_init.out_plot_path+'/'+sub_dir+'/'+var+'_'+plot_type+'.png',
                     bbox_inches='tight', dpi=dpi_choice)
 
 def finish_plot(sub_dir, var, plot_type, tight_layout=True, save_fig=False, pdf=True):
@@ -174,7 +171,7 @@ def loop_meta_hist():
     """Generate histograms from available meta data."""
 
     for var, name in zip(pc.meta_var_names_turb, pc.meta_xls_names_turb):
-        plot_hist_series(psd.meta_df, var, name)
+        plot_hist_series(p_init.meta_df, var, name)
 
 def plot_group_meta_hist():
     """Plot 4 histograms using grouped bins on x-axis."""
@@ -292,10 +289,12 @@ def plot_NME_hist():
 
     plt.figure(1, figsize=(8, 6))
 
+    plt.rcParams.update({'font.size': 14})
+
     gridspec.GridSpec(2, 2)
 
     # need to get pre-nme-filter error data frame
-    df1 = pcd.get_error_df_dict(psd.data_file)['base_total_e']
+    df1 = pcd.get_error_df_dict(p_init.data_file)['base_total_e']
 
     df1p = df1.loc[(df1['error_cat'] == 'by_range') & (df1['error_name'] == 'nme')]
 
@@ -315,10 +314,9 @@ def plot_NME_hist():
     plt.xlabel('NME (%)')
 
     plt.legend()
-    plt.tight_layout()
 
     sheet_bt_choice = 'base_total_e'
-    df2 = psd.error_df
+    df2 = p_init.error_df
 
     def choose_in_out_def(in_or_out, in_out_def):
 
@@ -361,6 +359,8 @@ def plot_NME_hist():
     ax3.text(0.89, 0.88, '(c)', color='k', fontsize=12, transform=ax3.transAxes)
 
     finish_plot('error_hist', 'nme', '3def_hist')
+
+    plt.rcParams.update({'font.size': fs})
 
 def plot_wsti_nme_box():
     """Plot 4 panel box plots for WS-TI NME."""
@@ -429,7 +429,7 @@ def plot_wsti_nme_box():
         def plot_box_by_sheet(df, ax, sub_t):
 
             # add grey to colorblind... manually
-            # sns.color_palette(['grey'])
+            # list(sns.color_palette(['grey']))
             # sns.color_palette('colorblind')
 
             new_p = [(0.5019607843137255, 0.5019607843137255, 0.5019607843137255),
@@ -444,8 +444,8 @@ def plot_wsti_nme_box():
                      (0.9254901960784314, 0.8823529411764706, 0.2),
                      (0.33725490196078434, 0.7058823529411765, 0.9137254901960784)]
 
-            ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette=new_p)
-            # ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette='colorblind')
+            #ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette=new_p)
+            ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette='colorblind')
             # ax = sns.swarmplot(x='sheet_name', y='error_value', data=df, ax=ax, palette='colorblind')
 
             if error_name == 'nme':
@@ -476,12 +476,12 @@ def plot_wsti_nme_box():
 
         finish_plot('results', var, bt_choice + '_' + error_name)
 
-    loop_box_plot('total_e', 'nme', psd.error_df, extra_error_df=psd.extra_error_df)
+    loop_box_plot('total_e', 'nme', p_init.error_df, extra_error_df=p_init.extra_error_df)
 
 def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
     """Mass generate heatmaps of NME average and NME spread."""
 
-    def loop_nme_avg_spread_heatmap(by_bin, bt_choice, error_name, e_df=psd.error_df, ee_df=None,
+    def loop_nme_avg_spread_heatmap(by_bin, bt_choice, error_name, e_df=p_init.error_df, ee_df=None,
                                     rr_choice=pc.robust_resistant_choice):
 
         for idx, i_short in enumerate(pc.matrix_sheet_name_short):
@@ -501,7 +501,7 @@ def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
 
             for idx, i_short in enumerate(pc.extra_matrix_sheet_name_short):
 
-                df = psd.get_error_in_bin(psd.extra_error_df, i_short+bt_choice, by_bin, error_name)
+                df = psd.get_error_in_bin(p_init.extra_error_df, i_short+bt_choice, by_bin, error_name)
 
                 u_bin, average, spread = psd.find_unique_bin_create_dum(df['bin_name'])
 
@@ -546,14 +546,14 @@ def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
     for idx, (cat_i, bt_j, error_k) in enumerate(itertools.product(pc.error_cat_short[1:],
                                                                    pc.bt_choice, pc.error_name[1:])):
         loop_nme_avg_spread_heatmap(cat_i, bt_j, error_k,
-                                    e_df=psd.error_df, ee_df=ee_df,
+                                    e_df=p_init.error_df, ee_df=ee_df,
                                     rr_choice=rr_choice)
 
 def plot_inner_outer_data_count_box_hist():
     """Plot Inner Range and Outer Range data count"""
 
-    box_io_df = psd.error_df['base_total_e'].loc[(psd.error_df['base_total_e']['error_cat'] == 'by_range')
-                                                 & (psd.error_df['base_total_e']['error_name'] == 'data_count')]
+    box_io_df = p_init.error_df['base_total_e'].loc[(p_init.error_df['base_total_e']['error_cat'] == 'by_range')
+                                                    & (p_init.error_df['base_total_e']['error_name'] == 'data_count')]
 
     u_bin = box_io_df['bin_name'].unique()
 
@@ -578,13 +578,15 @@ def plot_inner_outer_data_count_box_hist():
 
     ax1.set_ylabel('10-minute data count')
 
-    base_inner_count = psd.error_df['base_bin_e'].loc[(psd.error_df['base_bin_e']['error_cat'] == 'by_range')
-                                                      & (psd.error_df['base_bin_e']['bin_name'] == 'Inner')
-                                                      & (psd.error_df['base_bin_e']['error_name'] == 'data_count')]
+    base_inner_count = p_init.error_df['base_bin_e'].loc[(p_init.error_df['base_bin_e']['error_cat'] == 'by_range')
+                                                         & (p_init.error_df['base_bin_e']['bin_name'] == 'Inner')
+                                                         & (p_init.error_df['base_bin_e']['error_name']
+                                                            == 'data_count')]
 
-    base_outer_count = psd.error_df['base_bin_e'].loc[(psd.error_df['base_bin_e']['error_cat'] == 'by_range')
-                                                      & (psd.error_df['base_bin_e']['bin_name'] == 'Outer')
-                                                      & (psd.error_df['base_bin_e']['error_name'] == 'data_count')]
+    base_outer_count = p_init.error_df['base_bin_e'].loc[(p_init.error_df['base_bin_e']['error_cat'] == 'by_range')
+                                                         & (p_init.error_df['base_bin_e']['bin_name'] == 'Outer')
+                                                         & (p_init.error_df['base_bin_e']['error_name']
+                                                            == 'data_count')]
 
     ratio_inout_count = pd.Series([base_outer_count['error_value'].values / base_inner_count['error_value'].values])
 
@@ -724,8 +726,8 @@ def plot_file_data_count_hist_box():
 
     for i in pc.error_cat_short[1:]:
 
-        loop_count_histbox(i, psd.error_df, pc.matrix_sheet_name_short)
-        loop_count_histbox(i, psd.extra_error_df, pc.extra_matrix_sheet_name_short)
+        loop_count_histbox(i, p_init.error_df, pc.matrix_sheet_name_short)
+        loop_count_histbox(i, p_init.extra_error_df, pc.extra_matrix_sheet_name_short)
 
 def loop_outer_diff_scatter(meta_var, one_plot=None, diff_choice=None):
     """Plot scatter plot between meta data and error, or between meta data and error difference.
@@ -830,7 +832,7 @@ def plot_outer_nme_inner_dc_scatter():
 
     for sheet in pc.matrix_sheet_name_short:
 
-        target_df = psd.error_df[sheet+'total_e']
+        target_df = p_init.error_df[sheet+'total_e']
 
         outer_nme = target_df.loc[(target_df['error_cat'] == 'by_range') & (target_df['error_name'] == 'nme')
                                   & (target_df['bin_name'] == 'Outer')]
@@ -906,7 +908,7 @@ def plot_nme_diff_box_range_scatter_hist():
     ax21.text(xp_fx, yp_fx, '(b)', color='k', fontsize=fs, transform=ax21.transAxes)
     plt.text(xp_fx - 0.07, yp_fx, '(c)', color='k', fontsize=fs, transform=ax22.transAxes)
 
-    finish_plot('results', 'nme_diff_box', 'range_scatter_hist')
+    finish_plot('results', 'nme_diff_box', 'range_scatter_hist', tight_layout=False)
 
 def plot_wsti_nme_avg_spread_heatmap():
     """Plot 1 average and spread NME heatmap for WS-TI, ITI-OS, and Inner-Outer Ranges."""
@@ -984,6 +986,9 @@ def plot_wsti_nme_avg_spread_heatmap():
     plt.rcParams.update({'font.size': fs})
 
 def plot_wsti_nme_ef_dot():
+    """Plot for NME scatter vs WS-TI bins each correction method.
+    Dot size proportionate to energy fraction.
+    """
 
     for idx, i_short in enumerate(pc.matrix_sheet_name_short):
         error_cat = 'by_ws_ti'
@@ -1024,3 +1029,209 @@ def plot_wsti_nme_ef_dot():
         plt.legend(loc='center left', bbox_to_anchor=(1., 0.5))
 
         finish_plot('results', 'wsti_nme', 'ef_dot')
+
+def get_removal_num(remove_outlier_choice, remove_quantile, diff_removal_num, percent_thres):
+
+    if remove_outlier_choice is True:
+        if remove_quantile is True:
+            ax1_title_head = ('Removing top ' + str(pc.quantile_cut * 100)[:-2] + '% of improvement ('
+                              + str(np.max(diff_removal_num))[:-2] + ' files max):\n')
+            plot_name_ro = 'q' + str(pc.quantile_cut * 100)[:-2]
+
+        else:
+            ax1_title_head = ('Removing data with improvement > ' + str(percent_thres)
+                              + '%' + str(np.max(diff_removal_num))[:-2] + ' files max):\n')
+            plot_name_ro = str(percent_thres) + '%'
+
+    else:
+        ax1_title_head = ''
+        plot_name_ro = ''
+
+    return ax1_title_head, plot_name_ro
+
+def plot_wsti_pct_ttest_ftest_heatmap(remove_outlier_choice=False, remove_quantile=False, bonferroni=None,
+                                      percent_thres=None):
+
+    plot_choice, pc_df, diff_ttest_df, ftest_df, \
+    diff_removal_num = psd.perform_stat_test(wsti=True, remove_outlier_choice=remove_outlier_choice,
+                                             remove_quantile=remove_quantile, bonferroni=bonferroni,
+                                             percent_thres=percent_thres)
+
+    if plot_choice is True:
+
+        pc_df11 = pc_df.iloc[0:5]
+        pc_df12 = pc_df.iloc[5:]
+
+        diff_ttest_df1 = diff_ttest_df.iloc[0:5]
+        diff_ttest_df2 = diff_ttest_df.iloc[5:]
+
+        ftest_df1 = ftest_df.iloc[0:5]
+        ftest_df2 = ftest_df.iloc[5:]
+
+        plt.rcParams.update({'font.size': f14})
+
+        gs = gridspec.GridSpec(190, 32)
+
+        fig, ax = plt.subplots(figsize=[14, 10])
+
+        top_start, top_end = 0, 84
+        center_left, center_right = 10, 22
+
+        ax11 = plt.subplot(gs[top_start:top_end, 0:center_left])
+        ax12 = plt.subplot(gs[top_end + 4:, 0:center_left])
+        ax21 = plt.subplot(gs[top_start:top_end, center_left + 1:center_right - 1])
+        ax22 = plt.subplot(gs[top_end + 4:-51, center_left + 1:center_right - 1])
+        ax31 = plt.subplot(gs[top_start:top_end, center_right:])
+        ax32 = plt.subplot(gs[top_end + 4:-51, center_right:])
+
+        ax1_title_head, plot_name_ro = get_removal_num(remove_outlier_choice, remove_quantile,
+                                                       diff_removal_num, percent_thres)
+
+        sns.heatmap(pc_df11, linewidths=.5, cmap='YlOrRd', vmin=0, vmax=100, ax=ax11, annot=True, cbar=False)
+        ax11.yaxis.set_tick_params(rotation=0)
+        ax11.set_ylabel('WS-TI bin')
+        ax11.set_xlabel('')
+        ax11.set(xticklabels=[])
+        ax11.tick_params(bottom=False)
+
+        sns.heatmap(pc_df12, linewidths=.5, cmap='YlOrRd', vmin=0, vmax=100, ax=ax12, annot=True, cbar=False)
+        ax12.yaxis.set_tick_params(rotation=0)
+        ax12.set_ylabel('Inner-Outer Range')
+        ax12.set_xlabel('Correction method')
+        ax12.xaxis.set_tick_params(rotation=30)
+
+        sm = plt.cm.ScalarMappable(cmap='YlOrRd')
+        sm.set_array([0, 100])
+        cb3 = fig.colorbar(sm, ax=ax12, orientation='horizontal', pad=0.35)
+        cb3.set_label('Data sets with improvement (%)')
+
+        sns.heatmap(diff_ttest_df1, linewidths=.5, cmap='Greys', cbar=False, vmin=0, vmax=2, ax=ax21)
+        ax21.yaxis.set_tick_params(rotation=0)
+        ax21.set_xlabel('')
+        ax21.set(xticklabels=[])
+        ax21.tick_params(bottom=False, left=False)
+        ax21.set(yticklabels=[])
+        # ax21.tick_params(left=False)
+
+        sns.heatmap(diff_ttest_df2, linewidths=.5, cmap='Greys', cbar=False, vmin=0, vmax=2, ax=ax22)
+        ax22.yaxis.set_tick_params(rotation=0)
+        ax22.xaxis.set_tick_params(rotation=30)
+        ax22.tick_params(left=False)
+        ax22.set(yticklabels=[])
+        ax22.set_xlabel('Correction method')
+
+        ax2_c = sns.color_palette(palette='Greys').as_hex()
+        ax22.text(0.5, -0.9, 'Method improves \nfrom Baseline', color=ax2_c[3], fontsize=f14, ha='center',
+                  weight='semibold', transform=ax22.transAxes)
+        ax22.text(0.5, -1.0, 'Method improves significantly', color=ax2_c[-1], fontsize=f14, ha='center',
+                  weight='semibold', transform=ax22.transAxes)
+
+        sns.heatmap(ftest_df1, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax31)
+        ax31.yaxis.set_tick_params(rotation=0)
+        ax31.yaxis.tick_right()
+        ax31.set_xlabel('')
+        ax31.set(xticklabels=[])
+        ax31.tick_params(bottom=False)
+
+        sns.heatmap(ftest_df2, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax32)
+        ax32.yaxis.set_tick_params(rotation=0)
+        ax32.xaxis.set_tick_params(rotation=30)
+        ax32.yaxis.tick_right()
+        ax32.set_xlabel('Correction method')
+
+        ax3_c = sns.color_palette(palette='Purples').as_hex()
+        ax32.text(0.5, -0.85, 'Method variance < Baseline variance', color=ax3_c[3], fontsize=f14, ha='center',
+                  weight='semibold', transform=ax32.transAxes)
+        ax32.text(0.5, -0.95, 'Method improves significantly', color=ax3_c[-1], fontsize=f14, ha='center',
+                  weight='semibold', transform=ax32.transAxes)
+
+        f8_xp, f8_yp = 0., -0.62
+
+        ax12.text(f8_xp, f8_yp, '(a)', color='k', fontsize=f14, transform=ax12.transAxes)
+        ax22.text(f8_xp, f8_yp, '(b)', color='k', fontsize=f14, transform=ax22.transAxes)
+        ax32.text(f8_xp, f8_yp, '(c)', color='k', fontsize=f14, transform=ax32.transAxes)
+
+        finish_plot('results', 'wsti_pct_ttest_ftest_'+plot_name_ro, 'heatmap', tight_layout=False)
+
+def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=False, remove_quantile=False,
+                                      bonferroni=None, percent_thres=None):
+
+
+    plot_choice, pc_df, diff_ttest_df, ftest_df, \
+    diff_removal_num = psd.perform_stat_test(error_cat=error_cat,
+                                             remove_outlier_choice=remove_outlier_choice,
+                                             remove_quantile=remove_quantile, bonferroni=bonferroni,
+                                             percent_thres=percent_thres)
+
+    if plot_choice is True:
+
+        pc_df.rename(columns=pc.method_dict, inplace=True)
+        diff_ttest_df.rename(columns=pc.method_dict, inplace=True)
+        ftest_df.rename(columns=pc.method_dict, inplace=True)
+
+        plt.rcParams.update({'font.size': f14})
+
+        gs = gridspec.GridSpec(100, 32)
+
+        fig, ax = plt.subplots(figsize=[14, 11])
+
+        top_start, top_end = 0, 100
+        center_left, center_right = 10, 22
+
+        ax1 = plt.subplot(gs[:top_end, 0:center_left])
+        ax2 = plt.subplot(gs[:top_end - 31, center_left + 1:center_right - 1])
+        ax3 = plt.subplot(gs[:top_end - 31, center_right:])
+
+        ax1_title_head, plot_name_ro = get_removal_num(remove_outlier_choice, remove_quantile,
+                                                       diff_removal_num, percent_thres)
+
+        sns.heatmap(pc_df, linewidths=.5, cmap='YlOrRd', vmin=0, vmax=100, ax=ax1, annot=True, cbar=False)
+        ax1.yaxis.set_tick_params(rotation=0)
+
+        if error_cat == 'by_ws_bin_outer':
+            ax1.set_ylabel('Normalized Outer Range wind-speed bin')
+        else:
+            ax1.set_ylabel(error_cat)
+
+        ax1.set_xlabel('Correction method')
+        ax1.xaxis.set_tick_params(rotation=30)
+
+        sm = plt.cm.ScalarMappable(cmap='YlOrRd')
+        sm.set_array([0, 100])
+        cb3 = fig.colorbar(sm, ax=ax1, orientation='horizontal', pad=0.16)
+        cb3.set_label('Data sets with improvement (%)')
+
+        sns.heatmap(diff_ttest_df, linewidths=.5, cmap='Greys', cbar=False, vmin=0, vmax=2, ax=ax2)
+        ax2.yaxis.set_tick_params(rotation=0)
+        ax2.xaxis.set_tick_params(rotation=30)
+        ax2.tick_params(left=False)
+        ax2.set(yticklabels=[])
+        ax2.set_xlabel('Correction method')
+
+        ax2_c = sns.color_palette(palette='Greys').as_hex()
+        ax2.text(0.5, -0.3, 'Method improves \nfrom Baseline', color=ax2_c[3], fontsize=f14, ha='center',
+                 weight='semibold', transform=ax2.transAxes)
+        ax2.text(0.5, -0.34, 'Method improves significantly', color=ax2_c[-1], fontsize=f14, ha='center',
+                 weight='semibold', transform=ax2.transAxes)
+
+        sns.heatmap(ftest_df, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax3)
+        ax3.yaxis.set_tick_params(rotation=0)
+        ax3.xaxis.set_tick_params(rotation=30)
+        ax3.yaxis.tick_right()
+        ax3.set_xlabel('Correction method')
+
+        ax3_c = sns.color_palette(palette='Purples').as_hex()
+        ax3.text(0.5, -0.28, 'Method variance < Baseline variance', color=ax3_c[3], fontsize=f14, ha='center',
+                 weight='semibold', transform=ax3.transAxes)
+        ax3.text(0.5, -0.32, 'Method improves significantly', color=ax3_c[-1], fontsize=f14, ha='center',
+                 weight='semibold', transform=ax3.transAxes)
+
+        f8_xp, f8_yp = 0., -0.2
+
+        ax1.text(f8_xp, f8_yp, '(a)', color='k', fontsize=f14, transform=ax1.transAxes)
+        ax2.text(f8_xp, f8_yp, '(b)', color='k', fontsize=f14, transform=ax2.transAxes)
+        ax3.text(f8_xp, f8_yp, '(c)', color='k', fontsize=f14, transform=ax3.transAxes)
+
+        finish_plot('results', error_cat+'_pct_ttest_ftest_'+plot_name_ro, 'heatmap', tight_layout=False)
+
+

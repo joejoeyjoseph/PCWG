@@ -157,6 +157,11 @@ percent_thres_choice = 1 # in percent
 
 robust_resistant_choice = None
 
+# based on the number of bins in Overall, Inner-Outer Range, and WS-TI & ITI-OS bins
+alpha_thres_wsti_list = [1, 2, 2, 5, 5, 5, 5, 5]
+
+quantile_cut = 0.1
+
 ### Filtering
 
 nme_filter_thres = 1 # in percent

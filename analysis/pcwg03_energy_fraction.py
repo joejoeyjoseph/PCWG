@@ -191,7 +191,7 @@ def cal_check_remove_ef(error_cat, new_bin):
 
 def get_wsti_ef_nme():
     """Separate energy fraction and NME data frame into two pairs of data frames for plotting.
-    Similar procedure as in `get_outws_nme` for Outer Range WS bins.
+    Similar procedure as in `get_outws_ef_nme` for Outer Range WS bins.
     """
 
     error_cat = 'by_ws_ti'

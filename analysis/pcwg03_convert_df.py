@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 import itertools
 
@@ -7,22 +7,10 @@ import os
 from pathlib import Path
 import pickle
 
+import pcwg03_initialize as p_init
+
 import pcwg03_config as pc
 import pcwg03_read_data as prd
-
-py_file_path = os.getcwd()
-
-matrix_sheet_name = pc.matrix_sheet_name
-
-matrix_sheet_name_short = pc.matrix_sheet_name_short
-
-bt_choice = pc.bt_choice
-
-correction_list = pc.correction_list
-
-extra_matrix_sheet_name = pc.extra_matrix_sheet_name
-
-extra_matrix_sheet_name_short = pc.extra_matrix_sheet_name_short
 
 def turn_submission_to_series(file):
 
@@ -40,7 +28,7 @@ def turn_meta_to_series(file):
 
 def turn_error_matrices_to_df(file, sheet, bt_choice):
 
-    error_df = prd.load_PCWG03(file, sheet, bin_or_total=bt_choice).read_xls_matrix()
+    error_df = prd.load_PCWG03(file, sheet, bin_or_total=pc.bt_choice).read_xls_matrix()
 
     return error_df
 
@@ -61,7 +49,7 @@ def loop_matrix_sheet(bt_list, count, error_dict, file_list, sheet_name, sheet_n
 
 def search_pkl_existence(pkl_name):
 
-    pkl_file = py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
+    pkl_file = p_init.py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
     pkl_path = Path(pkl_file)
 
     return pkl_path.exists()
@@ -69,7 +57,7 @@ def search_pkl_existence(pkl_name):
 
 def load_existing_pkl(pkl_name):
 
-    pkl_file = py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
+    pkl_file = p_init.py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
 
     print(pkl_name + ' pkl file exists; loading pkl file directly!')
 
@@ -86,7 +74,7 @@ def read_xls_write_pkl(pkl_name, turn_function, data_file):
     data = [turn_function(file) for file in data_file]
     out_df = pd.concat(data, axis=1).T
 
-    pkl_file = py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
+    pkl_file = p_init.py_file_path + '/data_pcwg03_' + pkl_name + '.pkl'
 
     with open(pkl_file, 'wb') as f:
         pickle.dump(out_df, f)
@@ -143,14 +131,14 @@ def get_error_df_dict(data_file):
 
         error_df_dict = {}
 
-        for ms_count in range(len(matrix_sheet_name)):
-            print('working on ' + matrix_sheet_name[ms_count])
+        for ms_count in range(len(pc.matrix_sheet_name)):
+            print('working on ' + pc.matrix_sheet_name[ms_count])
 
-            error_df_dict = loop_matrix_sheet(bt_list=bt_choice, count=ms_count, error_dict=error_df_dict,
-                                              file_list=data_file, sheet_name=matrix_sheet_name,
-                                              sheet_name_short=matrix_sheet_name_short)
+            error_df_dict = loop_matrix_sheet(bt_list=pc.bt_choice, count=ms_count, error_dict=error_df_dict,
+                                              file_list=data_file, sheet_name=pc.matrix_sheet_name,
+                                              sheet_name_short=pc.matrix_sheet_name_short)
 
-        error_pkl_file = py_file_path + '/data_pcwg03_error.pkl'
+        error_pkl_file = p_init.py_file_path + '/data_pcwg03_error.pkl'
 
         with open(error_pkl_file, 'wb') as f:
             pickle.dump(error_df_dict, f)
@@ -171,23 +159,24 @@ def get_extra_error_df_dict(data_file):
 
         extra_error_df_dict = {}
 
-        for correct_i in range(len(correction_list)):
+        for correct_i in range(len(pc.correction_list)):
 
             all_list = []
 
             for file in data_file:
-                all_list.append(prd.load_PCWG03(file, 'Submission').read_xls_extra_matrix(correction_list[correct_i]))
+                all_list.append(prd.load_PCWG03(file, 'Submission').read_xls_extra_matrix(pc.correction_list[correct_i]))
 
             select_list = [x for x in all_list if x is not None]
             extra_sheet_list = [data_file_path + '/' + x + '.xls' for x in select_list]
 
-            print('working on ' + extra_matrix_sheet_name[correct_i])
+            print('working on ' + pc.extra_matrix_sheet_name[correct_i])
 
-            extra_error_df_dict = loop_matrix_sheet(bt_list=bt_choice, count=correct_i, error_dict=extra_error_df_dict,
-                                                    file_list=extra_sheet_list, sheet_name=extra_matrix_sheet_name,
-                                                    sheet_name_short=extra_matrix_sheet_name_short)
+            extra_error_df_dict = loop_matrix_sheet(bt_list=pc.bt_choice, count=correct_i,
+                                                    error_dict=extra_error_df_dict, file_list=extra_sheet_list,
+                                                    sheet_name=pc.extra_matrix_sheet_name,
+                                                    sheet_name_short=pc.extra_matrix_sheet_name_short)
 
-        extra_error_pkl_file = py_file_path + '/data_pcwg03_extra_error.pkl'
+        extra_error_pkl_file = p_init.py_file_path + '/data_pcwg03_extra_error.pkl'
 
         with open(extra_error_pkl_file, 'wb') as f:
             pickle.dump(extra_error_df_dict, f)

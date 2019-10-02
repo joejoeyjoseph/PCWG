@@ -1,25 +1,17 @@
-import os
-import glob
 import copy
 import pandas as pd
 import numpy as np
 import itertools
+import math
+from scipy import stats
+
+import pcwg03_initialize as p_init
 
 import pcwg03_config as pc
 import pcwg03_convert_df as pcd
 import pcwg03_energy_fraction as pef
 
-# code directory
-py_file_path = os.getcwd()
-# put generated plots near code
-out_plot_path = py_file_path+'/plots/'
-
-data_file = glob.glob(pc.data_file_path+'*.xls')
-
-meta_df = pcd.get_metadata_df(data_file)
-
-error_df, extra_error_df = pcd.filter_base_bin_nme(pcd.get_error_df_dict(data_file),
-                                                   pcd.get_extra_error_df_dict(data_file))
+meta_df, error_df, extra_error_df = p_init.meta_df, p_init.error_df, p_init.extra_error_df
 
 base_bin_e_df = error_df['base_bin_e']
 base_total_e_df = error_df['base_total_e']
@@ -165,23 +157,6 @@ def get_wsti_nme_stat():
         all_wsti_nme_df.reset_index(inplace=True, drop=True)
 
     return average_df, spread_df, all_wsti_nme_df
-
-def get_outws_nme_stat():
-    """Get average and spread statistics for Outer Range WS bins."""
-
-    all_outws_nme_df = pd.DataFrame()
-
-    for method in pc.matrix_sheet_name_short:
-
-        df = error_df[method + 'total_e']
-        df_s = df.loc[(df['error_cat'] == 'by_ws_bin_outer') & (df['error_name'] == 'nme')]
-        df_s_toadd = copy.copy(df_s)
-        df_s_toadd['method'] = method.rstrip('_')
-        all_outws_nme_df = pd.concat([all_outws_nme_df, df_s_toadd], axis=0)
-
-    all_outws_nme_df.reset_index(inplace=True, drop=True)
-
-    return all_outws_nme_df
 
 def sort_plot_wsti_df_index(df):
     """Sort WS-TI bin order for plotting."""
@@ -345,3 +320,218 @@ def get_nme_diff_range():
     nme_range_p_df.reset_index(inplace=True)
 
     return nme_diff_df, nme_range_p_df
+
+def get_methods_nme(error_cat):
+    """Get average and spread statistics for Outer Range WS bins."""
+
+    all_outws_nme_df = pd.DataFrame()
+
+    for method in pc.matrix_sheet_name_short:
+
+        df = error_df[method + 'total_e']
+        df_s = df.loc[(df['error_cat'] == error_cat) & (df['error_name'] == 'nme')]
+        df_s_toadd = copy.copy(df_s)
+        df_s_toadd['method'] = method.rstrip('_')
+        all_outws_nme_df = pd.concat([all_outws_nme_df, df_s_toadd], axis=0)
+
+    all_outws_nme_df.reset_index(inplace=True, drop=True)
+
+    return all_outws_nme_df
+
+def perform_stat_test(wsti=False, error_cat=None,
+                      remove_outlier_choice=False, remove_quantile=False, bonferroni=None, percent_thres=None):
+
+    plot_choice = False
+
+    if wsti is True:
+        dum1, dum2, nme_df = get_wsti_nme_stat()
+    else:
+        if error_cat is None:
+            print('missing ')
+        else:
+            nme_df = get_methods_nme(error_cat)
+
+    for method_num, method_sheet in enumerate(pc.matrix_sheet_name_short[1:]):
+
+        base_df = nme_df.loc[nme_df['method'] == 'base']
+
+        i_short = method_sheet.rstrip('_')
+        method_df = nme_df.loc[nme_df['method'] == i_short]
+
+        base_df_s = base_df.reset_index()
+        method_df_s = method_df.reset_index()
+
+        if (base_df_s['file_name'].values != method_df_s['file_name'].values).all():
+            print('file names in baseline and method df do not match!')
+
+        u_bin = base_df_s['bin_name'].unique()
+
+        pc_improve = np.zeros(len(u_bin))
+        diff_ttest = np.zeros(len(u_bin))
+        ftest = np.zeros(len(u_bin))
+
+        if method_num == 0:
+            pc_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
+            diff_ttest_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
+            ftest_df = pd.DataFrame(index=u_bin, columns=[pc.matrix_sheet_name_short[1:]])
+            diff_removal_num = np.zeros(0)
+
+        for idx, val in enumerate(u_bin):
+
+            base_array = base_df_s.loc[(base_df_s['bin_name'] == val)]['error_value']
+            method_array = method_df_s.loc[(method_df_s['bin_name'] == val)]['error_value']
+
+            if pd.isna(base_array) is True:
+                base_na = base_array.loc[(pd.isna(base_array) is True)].index
+            else:
+                base_na = np.zeros(len(u_bin))
+
+            if pd.isna(method_array) is True:
+                method_na = method_array.loc[(pd.isna(method_array) is True)].index
+            else:
+                method_na = np.zeros(len(u_bin))
+
+            # Bonferroni Correction, aka make alpha smaller dependent on the number of stat tests
+            if bonferroni == 1:  # looser, because each method is independent
+                if wsti is True:
+                    alpha_thres = pc.alpha_choice/pc.alpha_thres_wsti_list[idx]
+                else:
+                    alpha_thres = pc.alpha_choice/(len(u_bin))
+            elif bonferroni == 2:  # stricter
+                alpha_thres = pc.alpha_choice/(len(u_bin)*len(pc.matrix_sheet_name_short[1:]))
+            else:
+                alpha_thres = pc.alpha_choice
+
+            # alpha_p_text = '_a' + str(round(alpha_thres, 5))
+
+            if all(base_na) == all(method_na): # ensure the nan's are at the same indices
+
+                base_data = base_array.dropna()
+                method_data = method_array.dropna()
+
+                base_data_dum = copy.deepcopy(base_data)
+                method_data_dum = copy.deepcopy(method_data)
+
+                # need 2 samples to do stat tests
+                if (len(base_data) > 1) and (len(method_data) > 1):
+
+                    # individual improvement, negative means improved
+                    # compare absolute value of NME
+                    diff_array = (abs(method_data) - abs(base_data)) * 100.
+
+                    diff_array_dum = copy.deepcopy(diff_array)
+
+                    # make t test more rigorous by removing data points of "extreme" improvement
+                    if remove_outlier_choice is True:
+
+                        if remove_quantile is True:  # remove x percent of "extreme" improvement
+                            quantile_cut = 0.1
+                            bottom = diff_array.quantile(quantile_cut)  # bottom 10%
+                            diff_data_no_outlier = diff_array.drop((diff_array[diff_array.values < bottom].index))
+                            #print(len(diff_data_no_outlier))
+                            #print(len(diff_array) - len(diff_data_no_outlier))
+
+                        else:
+                            # remove "extreme" improvements above 1 percent of absolute magnitude
+                            diff_data_no_outlier = diff_array.drop((diff_array[diff_array.values
+                                                                               < -percent_thres].index))
+
+                        # number of removed submissions
+                        diff_removal = len(diff_array) - len(diff_data_no_outlier)
+                        diff_removal_num = np.append(diff_removal_num, diff_removal)
+
+                        if diff_removal > 0:
+
+                            # if choose to remove outliers, only plot when outliers are successfully removed
+                            plot_choice = True
+                            diff_array_dum = diff_data_no_outlier
+
+                            if remove_quantile is False:
+                                print('remove '+str(diff_removal)+' submissions at: '+error_cat+' '+val+' '+error)
+
+                            # remove BOTH "extreme" improvements and deterioration for F test
+                            base_data_dum = base_data.drop((diff_array[diff_array.values < -percent_thres].index)
+                                                           | (diff_array[diff_array.values > percent_thres].index))
+                            method_data_dum = method_data.drop((diff_array[diff_array.values < -percent_thres].index)
+                                                               | (diff_array[diff_array.values > percent_thres].index))
+
+                    else:
+                        plot_choice = True
+
+                    loc_improve = np.where(diff_array_dum < pc.diff_benchmark)
+                    len_improve = np.shape(loc_improve)[1]
+                    pc_improve[idx] = 100 * len_improve / len(diff_array_dum)
+
+                    # mean diff of individual error < diff_benchmark
+                    if diff_array_dum.mean() < pc.diff_benchmark:
+                        diff_ttest[idx] += 1
+
+                        # some error categories do not have enough data
+                        # hence t test may fail after outlier removal
+                        try:
+                            diff_t_stat = stats.ttest_1samp(diff_array_dum, pc.diff_benchmark)
+                        except ZeroDivisionError:
+                            class diff_t_stat:
+                                statistic = np.nan
+                                pvalue = np.nan
+
+                        # one-sample, two-sided t test
+                        # if diff_t_stat.pvalue <= alpha_thres: # reject H0: no diff, or diff = 0
+
+                        # one-sample, one-sided t test
+                        # reject H0: no diff, or diff = 0
+                        # Ha: mean diff of individual error < diff_benchmark
+                        if ((diff_t_stat.statistic < 0) # t-statistic < 0 (differ from diff_benchmark)
+                                & (diff_t_stat.pvalue / 2 <= alpha_thres)):  # one-sided, half of p-value
+
+                            # mean diff of individual error < diff_benchmark *significantly*
+                            diff_ttest[idx] += 1
+
+                            # do KS test when outliers are removed
+                            if ((remove_outlier_choice is True) & (plot_choice is True)):
+                                ks_stat = stats.kstest(list(diff_data_no_outlier.values), 'norm')
+                                if ks_stat.pvalue <= alpha_thres:
+                                    # print(method_sheet+' is statistically significant from Gaussian')
+                                    pass
+                                else:
+                                    print(error_cat+' '+val+' '+b_or_t+' '+error+':')
+                                    print(method_sheet+' is NOT statistically significant from Gaussian')
+
+                    # if np.abs(base_data_dum.std()) > np.abs(method_data_dum.std()): # sd < baseline
+                    if np.abs(base_data_dum.var()) > np.abs(method_data_dum.var()):  # variance < baseline
+                        ftest[idx] += 1
+
+                        # better than F test, for non-Gaussian
+                        f_stat = stats.levene(base_data_dum, method_data_dum)
+
+                        # "two-sided" F test
+                        # Levene's test seems to only be 2-sided...
+                        # https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm
+                        # vs
+                        # https://www.itl.nist.gov/div898/handbook/eda/section3/eda359.htm
+                        if f_stat.pvalue <= alpha_thres:  # reject H0: same variance
+                            ftest[idx] += 1  # sd or variance < baseline *significantly*
+
+        pc_df[method_sheet] = pc_improve
+        diff_ttest_df[method_sheet] = diff_ttest
+        ftest_df[method_sheet] = ftest
+
+        pc_df.rename(columns={method_sheet: method_sheet.rstrip('_')},
+                     inplace=True)
+        diff_ttest_df.rename(columns={method_sheet: method_sheet.rstrip('_')},
+                             inplace=True)
+        ftest_df.rename(columns={method_sheet: method_sheet.rstrip('_')},
+                        inplace=True)
+
+        if wsti is True:
+
+            pc_df = sort_plot_wsti_df_index(pc_df)
+            diff_ttest_df = sort_plot_wsti_df_index(diff_ttest_df)
+            ftest_df = sort_plot_wsti_df_index(ftest_df)
+
+        pc_df.rename(columns=pc.method_dict, inplace=True)
+        diff_ttest_df.rename(columns=pc.method_dict, inplace=True)
+        ftest_df.rename(columns=pc.method_dict, inplace=True)
+
+    return plot_choice, pc_df, diff_ttest_df, ftest_df, diff_removal_num
+
