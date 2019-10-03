@@ -3,7 +3,6 @@ import pandas as pd
 
 import itertools
 
-import os
 from pathlib import Path
 import pickle
 
@@ -11,6 +10,7 @@ import pcwg03_initialize as p_init
 
 import pcwg03_config as pc
 import pcwg03_read_data as prd
+
 
 def turn_submission_to_series(file):
 
@@ -26,7 +26,7 @@ def turn_meta_to_series(file):
     return meta_series
 
 
-def turn_error_matrices_to_df(file, sheet, bt_choice):
+def turn_error_matrices_to_df(file, sheet):
 
     error_df = prd.load_PCWG03(file, sheet, bin_or_total=pc.bt_choice).read_xls_matrix()
 
@@ -38,7 +38,7 @@ def loop_matrix_sheet(bt_list, count, error_dict, file_list, sheet_name, sheet_n
 
     for bt_count in range(len(bt_list)):
 
-        all_error = [turn_error_matrices_to_df(file, sheet_name[count], bt_list[bt_count])
+        all_error = [turn_error_matrices_to_df(file, sheet_name[count])
                      for file in file_list]
         all_error_df = pd.concat(all_error, axis=0)
         all_error_df.reset_index(inplace=True, drop=True)
@@ -46,6 +46,7 @@ def loop_matrix_sheet(bt_list, count, error_dict, file_list, sheet_name, sheet_n
         error_dict[sheet_name_short[count] + bt_list[bt_count]] = all_error_df
 
     return error_dict
+
 
 def search_pkl_existence(pkl_name):
 
@@ -84,7 +85,7 @@ def read_xls_write_pkl(pkl_name, turn_function, data_file):
 
 def get_submission_df(data_file):
 
-    if search_pkl_existence('submission') == True:
+    if search_pkl_existence('submission') is True:
 
         submission_df = load_existing_pkl('submission')
 
@@ -96,9 +97,10 @@ def get_submission_df(data_file):
 
     return submission_df
 
+
 def get_metadata_df(data_file):
 
-    if search_pkl_existence('metadata') == True:
+    if search_pkl_existence('metadata') is True:
 
         meta_df = load_existing_pkl('metadata')
 
@@ -116,12 +118,13 @@ def get_metadata_df(data_file):
 
     return meta_df
 
+
 def get_error_df_dict(data_file):
     """Load dictionary of error data frames from pickle file.
     If pickle file does not exist, make one.
     """
 
-    if search_pkl_existence('error') == True:
+    if search_pkl_existence('error') is True:
 
         error_df_dict = load_existing_pkl('error')
 
@@ -145,11 +148,12 @@ def get_error_df_dict(data_file):
 
     return error_df_dict
 
+
 def get_extra_error_df_dict(data_file):
 
     data_file_path = str(Path(data_file[0]).parent)
 
-    if search_pkl_existence('extra_error') == True:
+    if search_pkl_existence('extra_error') is True:
 
         extra_error_df_dict = load_existing_pkl('extra_error')
 
@@ -164,7 +168,8 @@ def get_extra_error_df_dict(data_file):
             all_list = []
 
             for file in data_file:
-                all_list.append(prd.load_PCWG03(file, 'Submission').read_xls_extra_matrix(pc.correction_list[correct_i]))
+                all_list.append(prd.load_PCWG03(file,
+                                                'Submission').read_xls_extra_matrix(pc.correction_list[correct_i]))
 
             select_list = [x for x in all_list if x is not None]
             extra_sheet_list = [data_file_path + '/' + x + '.xls' for x in select_list]
@@ -183,6 +188,7 @@ def get_extra_error_df_dict(data_file):
 
     return extra_error_df_dict
 
+
 def remove_error_entry(sheet_i, bt, df, df_filter, nme_filter_files):
     """Remove submissions that fail the NME filter."""
 
@@ -191,6 +197,7 @@ def remove_error_entry(sheet_i, bt, df, df_filter, nme_filter_files):
 
     file_out = (len(df[sheet]) - len(df_filter[sheet])) / pc.error_entry
     print('removing ' + str(round(file_out)) + ' files in ' + sheet)
+
 
 def filter_base_bin_nme(error_df, extra_error_df):
     """Filter out a fraction of submissions based on Baseline NME.

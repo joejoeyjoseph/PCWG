@@ -6,6 +6,7 @@ import itertools
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
+from matplotlib.colors import LinearSegmentedColormap
 
 import geopandas as gpd
 from descartes import PolygonPatch
@@ -21,23 +22,21 @@ meta_df = p_init.meta_df
 
 save_fig = pc.save_fig
 
-dpi_choice = 600 # output plot resolution
+dpi_choice = 600  # output plot resolution
 
-fs = 12
-f14 = 14
-f15 = 15
-f16 = 16
+fs, f14, f15, f16 = 12, 14, 15, 16
 
 plt.rcParams.update({'font.size': fs})
 
-xp_f1, yp_f1 = 0.04, 0.93 # x, y positions
+xp_f1, yp_f1 = 0.04, 0.93  # x, y positions
 
-fmt_code = '.1f' # for bootstrap ttest mean heatmap
+fmt_code = '.1f'  # for bootstrap t-test mean heatmap
+
 
 def save_plot(sub_dir, var, plot_type, pdf=True):
     """Export figure to either pdf or png file."""
 
-    if not os.path.exists(p_init.out_plot_path+'/'+ sub_dir):
+    if not os.path.exists(p_init.out_plot_path+'/'+sub_dir):
 
         os.makedirs(p_init.out_plot_path+'/'+sub_dir)
 
@@ -51,6 +50,7 @@ def save_plot(sub_dir, var, plot_type, pdf=True):
         plt.savefig(p_init.out_plot_path+'/'+sub_dir+'/'+var+'_'+plot_type+'.png',
                     bbox_inches='tight', dpi=dpi_choice)
 
+
 def finish_plot(sub_dir, var, plot_type, tight_layout=True, save_fig=False, pdf=True):
     """Terminating procedures for plotting."""
 
@@ -63,6 +63,26 @@ def finish_plot(sub_dir, var, plot_type, tight_layout=True, save_fig=False, pdf=
         save_plot(sub_dir, var, plot_type, pdf)
 
     plt.show()
+
+
+def plot_pdm_example():
+    """Plot example power deviation matrix.
+    Using input from Excel file.
+    """
+
+    file = p_init.py_file_path+'/pdm_example.xls'
+
+    df = pd.read_excel(file)
+    df.set_index('TI', inplace=True)
+
+    ax = sns.heatmap(df, cmap='RdYlBu', robust=True, center=0, cbar_kws={'label': 'Power deviation(%)'})
+
+    # ax.set_xlabel(r'Wind speed (m s$^{-1}$)')
+    ax.set_xlabel('Normalized wind speed')
+    ax.set_ylabel('TI (%)')
+
+    finish_plot('meta', 'pdm_example', 'heatmap')
+
 
 def plot_wsti_energy_fraction_box():
     """Plot 4 box plots for WS-TI, ITI-OS, and Inner-Outer Ranges.
@@ -119,6 +139,7 @@ def plot_wsti_energy_fraction_box():
 
     finish_plot('meta', 'wsti_energyfraction', 'box')
 
+
 def plot_outws_energy_fraction_box():
     """Plot 2 box plots for Outer Range WS.
     A box plot on energy and data fractions, and a box plot on NMEs.
@@ -158,6 +179,7 @@ def plot_outws_energy_fraction_box():
 
     finish_plot('meta', 'outws_energyfraction', 'box')
 
+
 def plot_hist_series(df, var, name):
     """Plot histogram for series of meta data."""
 
@@ -169,11 +191,13 @@ def plot_hist_series(df, var, name):
 
     finish_plot('meta', 'meta_' + var, 'hist')
 
+
 def loop_meta_hist():
     """Generate histograms from available meta data."""
 
     for var, name in zip(pc.meta_var_names_turb, pc.meta_xls_names_turb):
         plot_hist_series(p_init.meta_df, var, name)
+
 
 def plot_group_meta_hist():
     """Plot 4 histograms using grouped bins on x-axis."""
@@ -234,6 +258,7 @@ def plot_group_meta_hist():
 
     finish_plot('meta', 'meta_', 'hist_ranked')
 
+
 def plot_map():
     """Map submission origins, if available."""
 
@@ -257,12 +282,11 @@ def plot_map():
 
     world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
 
-    def plotCountryPatch(axes, country_name, fcolor):
+    def plot_country_patch(axes, country_name, fcolor):
         # plot a country on the provided axes
         nami = world[world.name == country_name]
         namigm = nami.__geo_interface__['features']  # geopandas's geo_interface
-        namig0 = {'type': namigm[0]['geometry']['type'], \
-                  'coordinates': namigm[0]['geometry']['coordinates']}
+        namig0 = {'type': namigm[0]['geometry']['type'], 'coordinates': namigm[0]['geometry']['coordinates']}
         axes.add_patch(PolygonPatch(namig0, fc=fcolor, ec='black', alpha=0.85, zorder=2))
 
     colmap = plt.cm.get_cmap('viridis')
@@ -270,7 +294,7 @@ def plot_map():
     ax = world.plot(figsize=(8, 4), edgecolor=u'gray', color='w')
 
     for x, y in zip(country_series_plot['country'].values, country_num_on_map):
-        plotCountryPatch(ax, x, colmap(y))
+        plot_country_patch(ax, x, colmap(y))
 
     plt.ylabel('Latitude')
     plt.xlabel('Longitude')
@@ -286,7 +310,8 @@ def plot_map():
 
     finish_plot('meta', 'meta', 'map', tight_layout=False)
 
-def plot_NME_hist():
+
+def plot_nme_hist():
     """Plot NME histograms: pre-NME-filtering and post-NME-filtering."""
 
     plt.figure(1, figsize=(8, 6))
@@ -364,13 +389,14 @@ def plot_NME_hist():
 
     plt.rcParams.update({'font.size': fs})
 
+
 def plot_wsti_nme_box():
     """Plot 4 panel box plots for WS-TI NME."""
 
     box_plot_y_scale = 0.5  # zoom in
     # box_plot_y_scale = 1
 
-    def ws_ti_df_by_sheet(sheet_name, sheet_name_short, df, bt_choice, error_name, file_num):
+    def ws_ti_df_by_sheet(sheet_name_short, df, bt_choice, error_name, file_num):
 
         sheet_bt_choice = sheet_name_short + bt_choice
 
@@ -393,7 +419,7 @@ def plot_wsti_nme_box():
 
         for i, i_short in zip(pc.matrix_sheet_name, pc.matrix_sheet_name_short):
 
-            dum_df = ws_ti_df_by_sheet(i, i_short, error_df, bt_choice, error_name, file_num=file_num_choice)
+            dum_df = ws_ti_df_by_sheet(i_short, error_df, bt_choice, error_name, file_num=file_num_choice)
 
             if pc.matrix_sheet_name.index(i) == 0:
                 ws_ti_df = dum_df
@@ -405,7 +431,7 @@ def plot_wsti_nme_box():
 
             for i, i_short in zip(pc.correction_list, pc.extra_matrix_sheet_name_short):
 
-                dum_df = ws_ti_df_by_sheet(i, i_short, extra_error_df, bt_choice, error_name,
+                dum_df = ws_ti_df_by_sheet(i_short, extra_error_df, bt_choice, error_name,
                                            file_num=file_num_choice)
 
                 if pc.correction_list.index(i) == 0:
@@ -446,7 +472,7 @@ def plot_wsti_nme_box():
                      (0.9254901960784314, 0.8823529411764706, 0.2),
                      (0.33725490196078434, 0.7058823529411765, 0.9137254901960784)]
 
-            #ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette=new_p)
+            # ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette=new_p)
             ax = sns.boxplot(x='sheet_name', y='error_value', data=df, ax=ax, palette='colorblind')
             # ax = sns.swarmplot(x='sheet_name', y='error_value', data=df, ax=ax, palette='colorblind')
 
@@ -479,6 +505,7 @@ def plot_wsti_nme_box():
         finish_plot('results', var, bt_choice + '_' + error_name)
 
     loop_box_plot('total_e', 'nme', p_init.error_df, extra_error_df=p_init.extra_error_df)
+
 
 def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
     """Mass generate heatmaps of NME average and NME spread."""
@@ -551,6 +578,7 @@ def plot_nme_avg_spread_heatmap(ee_df=None, rr_choice=None):
                                     e_df=p_init.error_df, ee_df=ee_df,
                                     rr_choice=rr_choice)
 
+
 def plot_inner_outer_data_count_box_hist():
     """Plot Inner Range and Outer Range data count"""
 
@@ -602,6 +630,7 @@ def plot_inner_outer_data_count_box_hist():
 
     finish_plot('meta', 'data_count', 'box_hist')
 
+
 def plot_file_data_count_hist_box():
     """Mass generate histogram of file count and box plot of data count for each category.
     Check if every sheet/method has the same file count for each inflow category.
@@ -613,7 +642,7 @@ def plot_file_data_count_hist_box():
 
             do_plot = False
 
-            bt_choice = 'bin_e' # same data count for total_e
+            bt_choice = 'bin_e'  # same data count for total_e
 
             df = e_df[i_short + bt_choice].loc[(e_df[i_short + bt_choice]['error_cat'] == by_bin)
                                                & (e_df[i_short + bt_choice]['error_name'] == 'data_count')]
@@ -624,13 +653,13 @@ def plot_file_data_count_hist_box():
 
             for i in range(len(df)):
 
-                for idx, val in enumerate(u_bin):
+                for index, val in enumerate(u_bin):
 
                     if df.iloc[i]['bin_name'] == val:
 
                         if pd.isnull(df.iloc[i]['error_value']):
 
-                            nan_bin_count[idx] += 1
+                            nan_bin_count[index] += 1
 
             file_num = len(df) / len(u_bin)
             bin_count = file_num - nan_bin_count
@@ -646,7 +675,7 @@ def plot_file_data_count_hist_box():
                 do_plot = True
 
             if lump_bin_count.shape[0] > 1:
-                #for i in range(lump_bin_count.shape[0]):
+                # for i in range(lump_bin_count.shape[0]):
                 for i in lump_bin_count:
 
                     if np.array_equal(bin_count, i):
@@ -663,11 +692,11 @@ def plot_file_data_count_hist_box():
 
                 hist_df = pd.DataFrame(file_data)
 
-                for idx, val in enumerate(u_bin):
+                for index, val in enumerate(u_bin):
 
                     data_count = df.loc[df['bin_name'] == val]['error_value'].values
 
-                    if idx == 0:
+                    if index == 0:
                         box_dict = {val: data_count}
                     else:
                         box_dict[val] = data_count
@@ -730,6 +759,7 @@ def plot_file_data_count_hist_box():
 
         loop_count_histbox(i, p_init.error_df, pc.matrix_sheet_name_short)
         loop_count_histbox(i, p_init.extra_error_df, pc.extra_matrix_sheet_name_short)
+
 
 def loop_outer_diff_scatter(meta_var, one_plot=None, diff_choice=None):
     """Plot scatter plot between meta data and error, or between meta data and error difference.
@@ -822,12 +852,14 @@ def loop_outer_diff_scatter(meta_var, one_plot=None, diff_choice=None):
 
             finish_plot('results', 'scatter_diff_outer', meta_var+op_text+'_'+bt_c)
 
+
 def plot_outer_diff_scatter(one_plot=None, diff_choice=None):
     """Mass generate scatter plot of error or error difference."""
 
     for meta_var in pc.meta_var_names_turb:
 
         loop_outer_diff_scatter(meta_var, one_plot=one_plot, diff_choice=diff_choice)
+
 
 def plot_outer_nme_inner_dc_scatter():
     """Generate scatter plot between Outer Range NME and Inner Range data count."""
@@ -849,6 +881,7 @@ def plot_outer_nme_inner_dc_scatter():
         ax.set_xlabel('inner range data count')
 
         finish_plot('results', 'scatter_outer_nme', 'inner_dc')
+
 
 def plot_nme_diff_box_range_scatter_hist():
     """Produce a panel of box plot, scatter, and histogram.
@@ -911,6 +944,7 @@ def plot_nme_diff_box_range_scatter_hist():
     plt.text(xp_fx - 0.07, yp_fx, '(c)', color='k', fontsize=fs, transform=ax22.transAxes)
 
     finish_plot('results', 'nme_diff_box', 'range_scatter_hist', tight_layout=False)
+
 
 def plot_wsti_nme_avg_spread_heatmap():
     """Plot 1 average and spread NME heatmap for WS-TI, ITI-OS, and Inner-Outer Ranges."""
@@ -987,6 +1021,7 @@ def plot_wsti_nme_avg_spread_heatmap():
 
     plt.rcParams.update({'font.size': fs})
 
+
 def plot_wsti_nme_ef_dot():
     """Plot for NME scatter vs WS-TI bins each correction method.
     Dot size proportionate to energy fraction.
@@ -1032,7 +1067,9 @@ def plot_wsti_nme_ef_dot():
 
         finish_plot('results', 'wsti_nme', 'ef_dot')
 
+
 def get_removal_num(remove_outlier_choice, remove_quantile, diff_removal_num, percent_thres):
+    """Determine the number of removed submissions from outlier filtering."""
 
     if remove_outlier_choice is True:
         if remove_quantile is True:
@@ -1051,10 +1088,17 @@ def get_removal_num(remove_outlier_choice, remove_quantile, diff_removal_num, pe
 
     return ax1_title_head, plot_name_ro
 
-def plot_wsti_pct_ttest_ftest_heatmap(remove_outlier_choice=False, remove_quantile=False, bonferroni=None,
-                                      percent_thres=None):
 
-    plot_choice, pc_df, diff_ttest_df, ftest_df, \
+def plot_wsti_pct_ttest_ltest_heatmap(remove_outlier_choice=False, remove_quantile=False, bonferroni=None,
+                                      percent_thres=None):
+    """Plot 3 heatmaps of statistical results for WS-TI and Inner-Outer Range.
+    Plot: percentage of data sets that improve from Baseline;
+    whether method's mean NME less than Baseline's or not, and its statistical significance;
+    whether method's NME variance less than Baseline's or not, and its statistical significance.
+    Similar to `plot_ecat_pct_ttest_ltest_heatmap`
+    """
+
+    plot_choice, pc_df, diff_ttest_df, ltest_df, \
     diff_removal_num = psd.perform_stat_test(wsti=True, remove_outlier_choice=remove_outlier_choice,
                                              remove_quantile=remove_quantile, bonferroni=bonferroni,
                                              percent_thres=percent_thres)
@@ -1067,8 +1111,8 @@ def plot_wsti_pct_ttest_ftest_heatmap(remove_outlier_choice=False, remove_quanti
         diff_ttest_df1 = diff_ttest_df.iloc[0:5]
         diff_ttest_df2 = diff_ttest_df.iloc[5:]
 
-        ftest_df1 = ftest_df.iloc[0:5]
-        ftest_df2 = ftest_df.iloc[5:]
+        ltest_df1 = ltest_df.iloc[0:5]
+        ltest_df2 = ltest_df.iloc[5:]
 
         plt.rcParams.update({'font.size': f14})
 
@@ -1128,14 +1172,14 @@ def plot_wsti_pct_ttest_ftest_heatmap(remove_outlier_choice=False, remove_quanti
         ax22.text(0.5, -1.0, 'Method improves significantly', color=ax2_c[-1], fontsize=f14, ha='center',
                   weight='semibold', transform=ax22.transAxes)
 
-        sns.heatmap(ftest_df1, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax31)
+        sns.heatmap(ltest_df1, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax31)
         ax31.yaxis.set_tick_params(rotation=0)
         ax31.yaxis.tick_right()
         ax31.set_xlabel('')
         ax31.set(xticklabels=[])
         ax31.tick_params(bottom=False)
 
-        sns.heatmap(ftest_df2, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax32)
+        sns.heatmap(ltest_df2, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax32)
         ax32.yaxis.set_tick_params(rotation=0)
         ax32.xaxis.set_tick_params(rotation=30)
         ax32.yaxis.tick_right()
@@ -1153,13 +1197,16 @@ def plot_wsti_pct_ttest_ftest_heatmap(remove_outlier_choice=False, remove_quanti
         ax22.text(f8_xp, f8_yp, '(b)', color='k', fontsize=f14, transform=ax22.transAxes)
         ax32.text(f8_xp, f8_yp, '(c)', color='k', fontsize=f14, transform=ax32.transAxes)
 
-        finish_plot('results', 'wsti_pct_ttest_ftest_'+plot_name_ro, 'heatmap', tight_layout=False)
+        finish_plot('results', 'wsti_pct_ttest_ltest_'+plot_name_ro, 'heatmap', tight_layout=False)
 
-def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=False, remove_quantile=False,
+
+def plot_ecat_pct_ttest_ltest_heatmap(error_cat=None, remove_outlier_choice=False, remove_quantile=False,
                                       bonferroni=None, percent_thres=None):
+    """Plot 3 heatmaps of statistical results for each error category.
+    Similar to `plot_wsti_pct_ttest_ltest_heatmap`
+    """
 
-
-    plot_choice, pc_df, diff_ttest_df, ftest_df, \
+    plot_choice, pc_df, diff_ttest_df, ltest_df, \
     diff_removal_num = psd.perform_stat_test(error_cat=error_cat,
                                              remove_outlier_choice=remove_outlier_choice,
                                              remove_quantile=remove_quantile, bonferroni=bonferroni,
@@ -1169,7 +1216,7 @@ def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=Fals
 
         pc_df.rename(columns=pc.method_dict, inplace=True)
         diff_ttest_df.rename(columns=pc.method_dict, inplace=True)
-        ftest_df.rename(columns=pc.method_dict, inplace=True)
+        ltest_df.rename(columns=pc.method_dict, inplace=True)
 
         plt.rcParams.update({'font.size': f14})
 
@@ -1216,7 +1263,7 @@ def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=Fals
         ax2.text(0.5, -0.34, 'Method improves significantly', color=ax2_c[-1], fontsize=f14, ha='center',
                  weight='semibold', transform=ax2.transAxes)
 
-        sns.heatmap(ftest_df, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax3)
+        sns.heatmap(ltest_df, linewidths=.5, cmap='Purples', cbar=False, vmin=0, vmax=2, ax=ax3)
         ax3.yaxis.set_tick_params(rotation=0)
         ax3.xaxis.set_tick_params(rotation=30)
         ax3.yaxis.tick_right()
@@ -1234,16 +1281,23 @@ def plot_ecat_pct_ttest_ftest_heatmap(error_cat=None, remove_outlier_choice=Fals
         ax2.text(f8_xp, f8_yp, '(b)', color='k', fontsize=f14, transform=ax2.transAxes)
         ax3.text(f8_xp, f8_yp, '(c)', color='k', fontsize=f14, transform=ax3.transAxes)
 
-        finish_plot('results', error_cat+'_pct_ttest_ftest_'+plot_name_ro, 'heatmap', tight_layout=False)
+        finish_plot('results', error_cat+'_pct_ttest_ltest_'+plot_name_ro, 'heatmap', tight_layout=False)
 
         plt.rcParams.update({'font.size': fs})
 
-def loop_ecat_pct_ttest_ftest_heatmap():
+
+def loop_ecat_pct_ttest_ltest_heatmap():
+    """Mass generate 3-panel heatmaps."""
 
     for i in pc.error_cat_short[1:]:
-        plot_ecat_pct_ttest_ftest_heatmap(error_cat=i)
+        plot_ecat_pct_ttest_ltest_heatmap(error_cat=i)
+
 
 def plot_ediff_hist_kstest():
+    """Mass generate histograms of |NME| difference from Baseline.
+    Perform K-S test for each distribution.
+    Print error bins of methods that do not statistically differ from Gaussian distribution.
+    """
 
     for idx, (b_or_t, error, error_cat) in enumerate(itertools.product(pc.bt_choice, pc.error_name[1:],
                                                                        pc.error_cat_short)):
@@ -1305,6 +1359,7 @@ def plot_ediff_hist_kstest():
 
             finish_plot('results', error_cat+' '+b_name+' '+b_or_t+' '+error, 'hist_kstest')
 
+
 def plot_filter_outlier_kde():
     """Produce kde plot for NME distributions.
     2 plots, before and after outlier filtering."""
@@ -1330,7 +1385,6 @@ def plot_filter_outlier_kde():
 
         base_df = p_init.error_df['base_' + 'total_e']
         base_df_s = base_df.loc[(base_df['error_cat'] == 'overall') & (base_df['error_name'] == 'nme')]
-        #u_bin = base_df_s['bin_name'].unique()
 
         method_df = p_init.error_df[method_sheet + 'total_e']
         method_df_s = method_df.loc[(method_df['error_cat'] == 'overall') & (method_df['error_name'] == 'nme')]
@@ -1384,7 +1438,12 @@ def plot_filter_outlier_kde():
 
     plt.rcParams.update({'font.size': fs})
 
+
 def plot_filter_outlier_panel_kde_hist():
+    """2 pairs of plots on NME and |NME| difference distributions.
+    Demonstrate the effects of outlier filtering on |NME| improvement over Baseline.
+    Choose the Den-Augturb method and 2 bins in Outer Range WS as example.
+    """
 
     def get_outer_2bins_nme(method):
 
@@ -1455,7 +1514,11 @@ def plot_filter_outlier_panel_kde_hist():
 
     plt.rcParams.update({'font.size': fs})
 
+
 def plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df):
+    """Plot 2 panels of heatmaps of t-test on means from bootstrapped samples.
+    Error categories: WS-TI, Inner-Outer Range, and Outer-Range WS.
+    """
 
     plt.rcParams.update({'font.size': f14})
 
@@ -1512,7 +1575,9 @@ def plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df):
 
     plt.rcParams.update({'font.size': fs})
 
+
 def plot_wsti_outws_bootstrap_ttest_heatmap(remove_outlier=None, wilcoxon=None, hypo_test=None):
+    """Prepare for plotting bootstrapped t-test results, and implement plotting."""
 
     dum1, dum2, wsti_nme_df = psd.get_wsti_nme_stat()
     outws_nme_df = psd.get_methods_nme('by_ws_bin_outer')
@@ -1529,7 +1594,9 @@ def plot_wsti_outws_bootstrap_ttest_heatmap(remove_outlier=None, wilcoxon=None, 
 
     plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df)
 
+
 def plot_ecat_boot_ttest_mean(df, error_cat):
+    """Plot heatmap of t-test on means from bootstrapped samples for any error category."""
 
     fig, ax = plt.subplots(figsize=(6, 7))
 
@@ -1546,9 +1613,11 @@ def plot_ecat_boot_ttest_mean(df, error_cat):
     ax.text(0.5, -0.3, 'Method improves significantly on average', color=ax_c[-1], fontsize=fs, ha='center',
             weight='semibold', transform=ax.transAxes)
 
-    plt.show()
+    finish_plot('results', 'bootstrap_ttest_'+error_cat, 'heatmap', tight_layout=False)
+
 
 def plot_ecat_bootstrap_ttest_heatmap(error_cat, remove_outlier=None, wilcoxon=None, hypo_test=None):
+    """Prepare for plotting bootstrapped results."""
 
     nme_df = psd.get_methods_nme(error_cat)
 
@@ -1558,8 +1627,52 @@ def plot_ecat_bootstrap_ttest_heatmap(error_cat, remove_outlier=None, wilcoxon=N
 
     plot_ecat_boot_ttest_mean(plot_df, error_cat)
 
+
 def loop_ecat_bootstrap_ttest_heatmap():
+    """Mass generate 1-panel t-test heatmap."""
 
     for i in pc.error_cat_short[1:]:
         plot_ecat_bootstrap_ttest_heatmap(error_cat=i)
 
+
+def plot_1in2_ltest_heatmap(df, error_cat, ax, cmap_in, sub_t, p_title, cut_color=False):
+    """Plot 1 heatmap of Levene's test results."""
+
+    if cut_color is True:
+
+        cmap_all = plt.get_cmap(cmap_in)
+        colors_half = cmap_all(np.linspace(0, 0.5, cmap_all.N // 2))
+        cmap = LinearSegmentedColormap.from_list('Upper Half', colors_half)
+
+    else:
+
+        cmap = cmap_in
+
+    sns.heatmap(df, linewidths=.5, cmap=cmap, vmin=0, vmax=100, ax=ax)
+    ax.set_title(p_title, pad=10)
+    ax.yaxis.set_tick_params(rotation=0)
+    ax.set_xlabel('correction methods')
+    ax.set_ylabel(error_cat)
+    ax.text(-0.25, -0.3, sub_t, color='k', fontsize=12, transform=ax.transAxes)
+
+
+def plot_ecat_bootstrap_ltest_heatmap(error_cat):
+    """Prepare for plotting bootstrapped Levene's test results, and implement plotting."""
+
+    count_var_df, count_ltest_df = psd.cal_bootstrap_ltest_pct(psd.get_methods_nme(error_cat))
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6))
+
+    plot_1in2_ltest_heatmap(count_var_df, error_cat, ax1, 'Purples', '(a)',
+                            'Percentage of reduced variance in \nbootstrapped samples from Baseline', cut_color=True)
+    plot_1in2_ltest_heatmap(count_ltest_df, error_cat, ax2, 'Purples', '(b)',
+                            'Percentage of significantly reduced variance in \nbootstrapped samples from Baseline')
+
+    finish_plot('results', 'bootstrap_ltest_'+error_cat, 'heatmap')
+
+
+def loop_ecat_bootstrap_ltest_heatmap():
+    """Mass generate 2-panel Levene's test heatmaps."""
+
+    for i in pc.error_cat_short[1:]:
+        plot_ecat_bootstrap_ltest_heatmap(error_cat=i)

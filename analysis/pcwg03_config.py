@@ -1,4 +1,4 @@
-# Configuration file for PCWG03
+# Configuration file for PCWG Share-03 analysis
 # NEED to be modified:
 # - if the Excel submission format is changed
 # - if data with more error sheets are submitted
@@ -6,7 +6,8 @@
 import copy
 
 ### Data path
-
+### Point to the directory containing the Excel files
+### Require user input
 data_file_path = '/Users/jlee/Documents/GitHub/PCWG_Share_03/data_03/data/'
 
 ### Save figure in pdf/png file or not
@@ -45,9 +46,9 @@ sub_var_head_bot = ['_base', '_denturb', '_den2dpdm', '_denaugturb', '_den3dpdm'
 
 sub_var_end_bot = ['_den_corr', '_rews', '_ti_renorm', '_pdm', '_prod_by_height']
 
-def_choice_list = ['A', 'B', 'C'] # inner range definitions
+def_choice_list = ['A', 'B', 'C']  # inner range definitions
 
-error_entry = 372 # number of entries in each submission in each error sheet
+error_entry = 372  # number of entries in each submission in each error sheet
 
 ### Meta data
 
@@ -87,10 +88,10 @@ meta_xls_names = ['Data Type [Mast, LiDAR, SoDAR, Mast & LiDAR, Mast & SoDAR]',
 meta_xls_names_turb = copy.copy(meta_xls_names)
 meta_xls_names_turb.extend(['Turbine Rated Power (MW)', 'Ratio: Rotor Diameter/Turbine Hub Height'])
 
-meta_var_grouped = {'geog_lat':'geog_lat_grouped', 'turbi_dia':'turbi_dia_grouped',
-                    'turbi_hh':'turbi_hh_grouped', 'turbi_spower':'turbi_spower_grouped',
-                    'turbi_rated_power':'turbi_rated_power_grouped',
-                    'turbi_d_hh_ratio':'turbi_d_hh_ratio_grouped'}
+meta_var_grouped = {'geog_lat': 'geog_lat_grouped', 'turbi_dia': 'turbi_dia_grouped',
+                    'turbi_hh': 'turbi_hh_grouped', 'turbi_spower': 'turbi_spower_grouped',
+                    'turbi_rated_power': 'turbi_rated_power_grouped',
+                    'turbi_d_hh_ratio': 'turbi_d_hh_ratio_grouped'}
 
 meta_xls_grouped_names = ['Geography - Approximate Latitude [to no decimal places e.g. 53°]',
                           'Turbine Geometry - Approximate Diameter (m)',
@@ -153,7 +154,7 @@ alpha_choice = 0.05
 # difference larger than diff_benchmark %, then method is worse than baseline
 diff_benchmark = 0
 
-percent_thres_choice = 1 # in percent
+percent_thres_choice = 1  # in percent
 
 robust_resistant_choice = None
 
@@ -162,11 +163,14 @@ alpha_thres_wsti_list = [1, 2, 2, 5, 5, 5, 5, 5]
 
 quantile_cut = 0.1
 
-boot_loop_num = 1e2 # 1e4
+boot_loop_num = 1e4
+
+# print message if bootstrapped result is beyond +/- x% of observed result
+boot_mean_bound = 10
 
 ### Filtering
 
-nme_filter_thres = 1 # in percent
+nme_filter_thres = 1  # in percent
 
 wsti_new_bin = 'ITI-OS'
 
@@ -176,5 +180,5 @@ outws_new_bin = 'Residual'
 
 sort_wsti_index = ['LWS-LTI', 'LWS-HTI', 'HWS-LTI', 'HWS-HTI', wsti_new_bin, 'Outer', 'Inner', 'Overall']
 
-method_dict = {'base':'Baseline', 'den_turb':'Den-Turb', 'den_2dpdm':'Den-2DPDM',
-               'den_augturb':'Den-Augturb', 'den_3dpdm':'Den-3DPDM'}
+method_dict = {'base': 'Baseline', 'den_turb': 'Den-Turb', 'den_2dpdm': 'Den-2DPDM',
+               'den_augturb': 'Den-Augturb', 'den_3dpdm': 'Den-3DPDM'}

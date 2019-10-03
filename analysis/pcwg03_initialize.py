@@ -1,5 +1,4 @@
 import os
-import copy
 import glob
 import numpy as np
 
@@ -13,6 +12,7 @@ py_file_path = os.getcwd()
 out_plot_path = py_file_path+'/plots/'
 
 data_file = glob.glob(pc.data_file_path+'*.xls')
+
 
 def group_meta_element_in_range(key, value):
     """Combine meta data into groups for plotting grouped histograms."""
@@ -60,6 +60,7 @@ def group_meta_element_in_range(key, value):
 
     meta_df[value] = series_edited
 
+
 meta_df = pcd.get_metadata_df(data_file)
 
 # group each meta data category into groups, for plotting histograms
@@ -68,4 +69,3 @@ for key, value in pc.meta_var_grouped.items():
 
 error_df, extra_error_df = pcd.filter_base_bin_nme(pcd.get_error_df_dict(data_file),
                                                    pcd.get_extra_error_df_dict(data_file))
-

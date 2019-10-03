@@ -7,6 +7,7 @@ import pcwg03_slice_df as psd
 # a number very close to 0 for error check
 check_energy_cal_thres = 1e-15
 
+
 def get_energy_df_section(lwslti, lwshti, hwslti, hwshti, itos, outer, inner, error_name, file_name):
     """Return WS-TI, ITI-OS, Inner-Outer Range data frame."""
 
@@ -15,6 +16,7 @@ def get_energy_df_section(lwslti, lwshti, hwslti, hwshti, itos, outer, inner, er
                             'error_name': error_name, 'file_name': file_name})
 
     return df
+
 
 def remove_problematic_files(nme_df, problem_file, error_cat, new_bin):
     """Remove submissions from NME data frame according to problem_file."""
@@ -39,9 +41,11 @@ def remove_problematic_files(nme_df, problem_file, error_cat, new_bin):
 
     return good_nme_df
 
+
 def get_raw_energy_pct(ef_df):
 
     return ef_df.loc[ef_df['error_name'] == 'energy_%']
+
 
 def check_problematic_file(ef_df, error_cat, print_state=None):
     """Check for problematic submissions with duplicating data in WS-TI bins.
@@ -64,11 +68,13 @@ def check_problematic_file(ef_df, error_cat, print_state=None):
 
     return problem_file
 
+
 def get_energy_pct(ef_df, error_cat):
 
     problem_file = check_problematic_file(ef_df, error_cat)
 
     return get_raw_energy_pct(ef_df).loc[~get_raw_energy_pct(ef_df)['file_name'].isin(problem_file)]
+
 
 def cal_wsti_ef(error_cat):
     """Calculate energy fraction for WS-TI bins.
@@ -168,6 +174,7 @@ def cal_wsti_ef(error_cat):
 
     return ef_df
 
+
 def cal_check_remove_ef(error_cat, new_bin):
     """Calculate energy fraction and remove problematic submissions."""
 
@@ -188,6 +195,7 @@ def cal_check_remove_ef(error_cat, new_bin):
     nme_df['error_value'] = nme_df['error_value'].astype(float) * 100
 
     return ef_df, nme_df
+
 
 def get_wsti_ef_nme():
     """Separate energy fraction and NME data frame into two pairs of data frames for plotting.
@@ -221,6 +229,7 @@ def get_wsti_ef_nme():
                                   wsti_io_nme_df.loc[wsti_io_nme_df['bin_name'] == bin_i].reset_index()], axis=0)
 
     return ef_filter_df1, ef_filter_df2, wsti_nme_df1, wsti_nme_df2
+
 
 def cal_outws_ef(error_cat):
     """Calculate energy fraction for Outer Range WS bins.
@@ -331,6 +340,7 @@ def cal_outws_ef(error_cat):
 
     return dc_ef_all_df
 
+
 def get_outws_ef_nme():
     """Prepare energy fraction and NME data frames for plotting.
     Similar procedure as in `get_wsti_nme` for WS-TI bins.
@@ -362,5 +372,3 @@ def get_outws_ef_nme():
                                    axis=0)
 
     return dc_ef_all_df_s, outws_nme_df_s
-
-
