@@ -599,7 +599,7 @@ def run_bootstrap_append_mean(data, n):
     return out
 
 
-def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
+def cal_bootstrap_means(df_boot, remove_outlier=None, hypo_test=None):
     """Get means of bootstrapped samples.
     Each sample contains |NME| differences between a method and Baseline, for each error bin.
     Options of choosing outlier removal and doing bootstrap hypothesis test.
@@ -608,7 +608,7 @@ def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
     ref_df = df_boot.loc[df_boot['method'] == 'base']
     u_bin = ref_df['bin_name'].unique()
 
-    if hypo_test is False:
+    if hypo_test is None:
         diff_boot_mean_mat = np.empty((len(pc.matrix_sheet_name_short[1:]), len(u_bin), int(pc.boot_loop_num)))
     else:
         diff_boot_mean_mat = np.empty((len(pc.matrix_sheet_name_short[1:]), len(u_bin), int(pc.boot_loop_num), 2))
@@ -650,7 +650,7 @@ def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
                     diff_data_dum = copy.deepcopy(diff_array)
 
                     # make t-test more rigorous by removing data points of "extreme" improvement
-                    if remove_outlier is True:
+                    if remove_outlier is not None:
 
                         diff_data_no_outlier = remove_quantile_in_array(diff_array)
 
@@ -661,7 +661,7 @@ def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
                         if diff_removal > 0:
                             diff_data_dum = diff_data_no_outlier
 
-                    if hypo_test is False:
+                    if hypo_test is None:
                         # bootstrap means from original sample
                         diff_boot_mean_mat[method_num, idx, :] = run_bootstrap_append_mean(diff_data_dum,
                                                                                            len(diff_data_dum))
@@ -683,7 +683,7 @@ def cal_bootstrap_means(df_boot, remove_outlier=False, hypo_test=False):
     return diff_boot_mean_mat
 
 
-def do_ttest_boot(df_boot, diff_boot_array, wsti=False, wilcoxon=False, hypo_test=False):
+def do_ttest_boot(df_boot, diff_boot_array, wsti=False, wilcoxon=None, hypo_test=None):
     """Perform one-sample, one-sided t-test for bootstrapped |NME| differences.
     Option of choosing Wilcoxon test instead of t-test and doing bootstrap hypothesis test.
     Output df for plotting heatmap.
@@ -701,7 +701,7 @@ def do_ttest_boot(df_boot, diff_boot_array, wsti=False, wilcoxon=False, hypo_tes
 
         for idx, val in enumerate(u_bin):
 
-            if hypo_test is False:
+            if hypo_test is None:
 
                 # t-test
                 # mean diff of individual error < diff_benchmark
@@ -710,7 +710,7 @@ def do_ttest_boot(df_boot, diff_boot_array, wsti=False, wilcoxon=False, hypo_tes
 
                     # some error categories do not have enough data
                     # hence t-test may fail after outlier removal
-                    if wilcoxon is False:  # do t-test
+                    if wilcoxon is None:  # do t-test
 
                         try:
                             diff_t_stat = stats.ttest_1samp(diff_boot_array[method_num, idx, :], pc.diff_benchmark)

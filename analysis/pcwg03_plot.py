@@ -1595,6 +1595,21 @@ def plot_wsti_outws_bootstrap_ttest_heatmap(remove_outlier=None, wilcoxon=None, 
     plot_wsti_outws_boot_ttest_mean(wsti_df, outws_df)
 
 
+def plot_removed_outlier_wsti_outws_bootstrap_ttest_heatmap():
+    """Prepare for plotting bootstrapped t-test results, and implement plotting."""
+
+    dum1, dum2, wsti_nme_df = psd.get_wsti_nme_stat()
+    outws_nme_df = psd.get_methods_nme('by_ws_bin_outer')
+
+    wsti_mean_df = psd.cal_bootstrap_means(wsti_nme_df, remove_outlier=True)
+    outws_mean_df = psd.cal_bootstrap_means(outws_nme_df, remove_outlier=True)
+
+    wsti_do_boot = psd.do_ttest_boot(wsti_nme_df, wsti_mean_df, wsti=True)
+    outws_do_boot = psd.do_ttest_boot(outws_nme_df, outws_mean_df)
+
+    plot_wsti_outws_boot_ttest_mean(wsti_do_boot, outws_do_boot)
+
+
 def plot_ecat_boot_ttest_mean(df, error_cat):
     """Plot heatmap of t-test on means from bootstrapped samples for any error category."""
 
@@ -1628,11 +1643,11 @@ def plot_ecat_bootstrap_ttest_heatmap(error_cat, remove_outlier=None, wilcoxon=N
     plot_ecat_boot_ttest_mean(plot_df, error_cat)
 
 
-def loop_ecat_bootstrap_ttest_heatmap():
+def loop_ecat_bootstrap_ttest_heatmap(remove_outlier=None):
     """Mass generate 1-panel t-test heatmap."""
 
     for i in pc.error_cat_short[1:]:
-        plot_ecat_bootstrap_ttest_heatmap(error_cat=i)
+        plot_ecat_bootstrap_ttest_heatmap(error_cat=i, remove_outlier=remove_outlier)
 
 
 def plot_1in2_ltest_heatmap(df, error_cat, ax, cmap_in, sub_t, p_title, cut_color=False):
